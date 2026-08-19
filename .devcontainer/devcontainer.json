@@ -1,0 +1,30 @@
+{
+  "name": "Fictitious Insurance - Java 25",
+  "image": "mcr.microsoft.com/devcontainers/java:1-25-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/maven:1": {
+      "version": "3.9"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "vmware.vscode-spring-boot",
+        "redhat.vscode-xml",
+        "vscjava.vscode-maven"
+      ],
+      "settings": {
+        "java.configuration.updateBuildConfiguration": "automatic",
+        "java.compile.nullAnalysis.mode": "automatic"
+      }
+    }
+  },
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "Insurance Core API",
+      "onAutoForward": "notify"
+    }
+  }
+}
