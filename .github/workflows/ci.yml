@@ -1,4 +1,4 @@
-name: CI
+name: Insurance Core API - CI
 
 on:
   push:
@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: Build, test and package
+  build-test-quality:
+    name: Build, test and quality gates
     runs-on: ubuntu-latest
 
     steps:
@@ -34,14 +34,23 @@ jobs:
           java -version
           mvn -version
 
-      - name: Verify
+      - name: Compile, test, Checkstyle and package
         run: mvn -B -ntp clean verify
 
-      - name: Upload JAR
+      - name: Upload application artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: java25-api
+          name: insurance-core-api
           path: target/*.jar
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          if-no-files-found: ignore
           retention-days: 7
