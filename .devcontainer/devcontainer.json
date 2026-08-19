@@ -1,6 +1,11 @@
 {
   "name": "Fictitious Insurance - Java 25",
   "image": "mcr.microsoft.com/devcontainers/java:25-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/maven:1": {
+      "version": "3.9"
+    }
+  },
   "customizations": {
     "vscode": {
       "extensions": [
