@@ -2,8 +2,6 @@
 
 Backend REST construido con Java 25, Spring Boot 4.1.0 y Maven.
 
-Spring Boot 4.x tiene soporte de primera clase para Java 25 y Maven 3.6.3+ es compatible. citeturn0search0turn0search2
-
 ## Endpoints
 
 | Método | Endpoint | Propósito |
