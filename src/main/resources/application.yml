@@ -1,15 +1,20 @@
 spring:
   application:
-    name: java25-api-ci
+    name: insurance-core-api
 
 server:
   port: 8080
+
+insurance:
+  integrations:
+    risk:
+      base-url: https://httpbin.org
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       probes:
