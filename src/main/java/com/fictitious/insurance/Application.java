@@ -1,4 +1,4 @@
-package com.aldo.demo;
+package com.fictitious.insurance;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

@@ -1,12 +1,12 @@
-package com.aldo.demo.service;
+package com.fictitious.insurance.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.aldo.demo.api.dto.CreateCustomerRequest;
-import com.aldo.demo.api.dto.CreatePolicyRequest;
-import com.aldo.demo.domain.Customer;
-import com.aldo.demo.domain.Policy;
-import com.aldo.demo.repository.InMemoryStore;
+import com.fictitious.insurance.api.dto.CreateCustomerRequest;
+import com.fictitious.insurance.api.dto.CreatePolicyRequest;
+import com.fictitious.insurance.domain.Customer;
+import com.fictitious.insurance.domain.Policy;
+import com.fictitious.insurance.repository.InMemoryStore;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;

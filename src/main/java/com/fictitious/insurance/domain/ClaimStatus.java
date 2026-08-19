@@ -1,4 +1,4 @@
-package com.aldo.demo.domain;
+package com.fictitious.insurance.domain;
 
 public enum ClaimStatus {
     REGISTERED,

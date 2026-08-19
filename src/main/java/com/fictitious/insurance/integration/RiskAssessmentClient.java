@@ -1,4 +1,4 @@
-package com.aldo.demo.integration;
+package com.fictitious.insurance.integration;
 
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;

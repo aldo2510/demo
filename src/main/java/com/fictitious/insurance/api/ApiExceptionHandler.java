@@ -1,4 +1,4 @@
-package com.aldo.demo.api;
+package com.fictitious.insurance.api;
 
 import java.time.Instant;
 import java.util.Map;

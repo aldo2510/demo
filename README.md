@@ -1,8 +1,6 @@
-# Insurance Core API
+# Fictitious Insurance — Insurance Core API
 
-Enterprise-style REST API for an insurance company, built with Java 25, Spring Boot 4.1 and Maven.
-
-> The repository is currently named `demo`; rename it to `insurance-core-api` in GitHub when ready.
+Enterprise-style REST API for **Fictitious Insurance**, built with Java 25, Spring Boot 4.1 and Maven.
 
 ## Architecture
 
@@ -10,14 +8,14 @@ Enterprise-style REST API for an insurance company, built with Java 25, Spring B
 HTTP Client
     |
     v
-Controllers / REST API
+REST Controllers
     |
     v
 Application Services
     |
     +---- Domain rules
     |
-    +---- In-memory repository
+    +---- Thread-safe in-memory repository
     |
     +---- External Risk API (RestClient)
 ```
@@ -27,13 +25,11 @@ The project intentionally starts without a database so it can be demonstrated lo
 ## Main capabilities
 
 ### Customers
-
 - Create customer
 - Retrieve customer
 - Duplicate document validation
 
 ### Policies
-
 - Create an active policy
 - Calculate premium from product and insured amount
 - Validate customer existence
@@ -41,13 +37,11 @@ The project intentionally starts without a database so it can be demonstrated lo
 - Retrieve policy
 
 Supported demo products:
-
 - `AUTO_STANDARD` — 3.5% premium rate
 - `AUTO_PREMIUM` — 5.0% premium rate
 - Other products — 4.0% default demo rate
 
 ### Claims
-
 - Register a claim against an active policy
 - Validate that the estimated loss does not exceed the insured amount
 - Retrieve claim
@@ -130,7 +124,6 @@ curl -X PATCH 'http://localhost:8080/api/v1/claims/CLAIM_UUID/status?status=PAID
 ## Run locally
 
 Requirements:
-
 - Java 25
 - Maven 3.9+
 
@@ -142,7 +135,6 @@ mvn spring-boot:run
 ## CI
 
 GitHub Actions executes:
-
 1. Checkout
 2. Java 25 setup with Maven cache
 3. Compile
@@ -156,8 +148,6 @@ The workflow is triggered by pushes and pull requests targeting `main`.
 
 ## Next enterprise evolution
 
-The codebase is prepared to evolve toward:
-
 - PostgreSQL + Flyway
 - Spring Data JPA
 - Redis caching
@@ -169,4 +159,4 @@ The codebase is prepared to evolve toward:
 - SCA and container scanning
 - Docker image
 - Kubernetes deployment
-- Observability with OpenTelemetry
+- OpenTelemetry observability

@@ -1,4 +1,4 @@
-package com.aldo.demo.api.dto;
+package com.fictitious.insurance.api.dto;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;

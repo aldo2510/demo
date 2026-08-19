@@ -1,12 +1,11 @@
-package com.aldo.demo.service;
+package com.fictitious.insurance.service;
 
-import com.aldo.demo.api.dto.CreatePolicyRequest;
-import com.aldo.demo.domain.Policy;
-import com.aldo.demo.domain.PolicyStatus;
-import com.aldo.demo.repository.InMemoryStore;
+import com.fictitious.insurance.api.dto.CreatePolicyRequest;
+import com.fictitious.insurance.domain.Policy;
+import com.fictitious.insurance.domain.PolicyStatus;
+import com.fictitious.insurance.repository.InMemoryStore;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 

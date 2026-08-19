@@ -1,8 +1,8 @@
-package com.aldo.demo.api;
+package com.fictitious.insurance.api;
 
-import com.aldo.demo.api.dto.CreatePolicyRequest;
-import com.aldo.demo.domain.Policy;
-import com.aldo.demo.service.PolicyService;
+import com.fictitious.insurance.api.dto.CreatePolicyRequest;
+import com.fictitious.insurance.domain.Policy;
+import com.fictitious.insurance.service.PolicyService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;

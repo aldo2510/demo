@@ -1,8 +1,8 @@
-package com.aldo.demo.service;
+package com.fictitious.insurance.service;
 
-import com.aldo.demo.api.dto.CreateCustomerRequest;
-import com.aldo.demo.domain.Customer;
-import com.aldo.demo.repository.InMemoryStore;
+import com.fictitious.insurance.api.dto.CreateCustomerRequest;
+import com.fictitious.insurance.domain.Customer;
+import com.fictitious.insurance.repository.InMemoryStore;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;

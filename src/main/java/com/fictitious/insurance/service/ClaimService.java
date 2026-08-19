@@ -1,11 +1,11 @@
-package com.aldo.demo.service;
+package com.fictitious.insurance.service;
 
-import com.aldo.demo.api.dto.CreateClaimRequest;
-import com.aldo.demo.domain.Claim;
-import com.aldo.demo.domain.ClaimStatus;
-import com.aldo.demo.domain.Policy;
-import com.aldo.demo.repository.InMemoryStore;
-import java.math.BigDecimal;
+import com.fictitious.insurance.api.dto.CreateClaimRequest;
+import com.fictitious.insurance.domain.Claim;
+import com.fictitious.insurance.domain.ClaimStatus;
+import com.fictitious.insurance.domain.Policy;
+import com.fictitious.insurance.domain.PolicyStatus;
+import com.fictitious.insurance.repository.InMemoryStore;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -25,7 +25,7 @@ public class ClaimService {
     public Claim create(CreateClaimRequest request) {
         Policy policy = policyService.get(request.policyId());
         LocalDate today = LocalDate.now();
-        if (policy.status() != com.aldo.demo.domain.PolicyStatus.ACTIVE
+        if (policy.status() != PolicyStatus.ACTIVE
                 || today.isBefore(policy.startDate())
                 || today.isAfter(policy.endDate())) {
             throw new IllegalArgumentException("Policy is not active on the incident date");

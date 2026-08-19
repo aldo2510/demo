@@ -1,8 +1,8 @@
-package com.aldo.demo.repository;
+package com.fictitious.insurance.repository;
 
-import com.aldo.demo.domain.Claim;
-import com.aldo.demo.domain.Customer;
-import com.aldo.demo.domain.Policy;
+import com.fictitious.insurance.domain.Claim;
+import com.fictitious.insurance.domain.Customer;
+import com.fictitious.insurance.domain.Policy;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;

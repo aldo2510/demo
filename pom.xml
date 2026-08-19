@@ -11,11 +11,11 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.aldo</groupId>
+    <groupId>com.fictitious.insurance</groupId>
     <artifactId>insurance-core-api</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>insurance-core-api</name>
-    <description>Enterprise insurance core REST API with Java 25 and Spring Boot</description>
+    <description>Enterprise insurance core REST API for Fictitious Insurance</description>
 
     <properties>
         <java.version>25</java.version>

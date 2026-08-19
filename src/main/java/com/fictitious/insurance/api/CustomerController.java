@@ -1,8 +1,8 @@
-package com.aldo.demo.api;
+package com.fictitious.insurance.api;
 
-import com.aldo.demo.api.dto.CreateCustomerRequest;
-import com.aldo.demo.domain.Customer;
-import com.aldo.demo.service.CustomerService;
+import com.fictitious.insurance.api.dto.CreateCustomerRequest;
+import com.fictitious.insurance.domain.Customer;
+import com.fictitious.insurance.service.CustomerService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
