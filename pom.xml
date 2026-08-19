@@ -11,14 +11,16 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.aldo.demo</groupId>
-    <artifactId>java25-api-ci</artifactId>
+    <groupId>com.aldo</groupId>
+    <artifactId>insurance-core-api</artifactId>
     <version>1.0.0-SNAPSHOT</version>
-    <name>java25-api-ci</name>
-    <description>REST API demo with Java 25, Spring Boot and Maven</description>
+    <name>insurance-core-api</name>
+    <description>Enterprise insurance core REST API with Java 25 and Spring Boot</description>
 
     <properties>
         <java.version>25</java.version>
+        <jacoco.version>0.8.13</jacoco.version>
+        <maven.checkstyle.version>3.6.0</maven.checkstyle.version>
     </properties>
 
     <dependencies>
@@ -28,15 +30,15 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-restclient</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-restclient</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -54,17 +56,31 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>${maven.checkstyle.version}</version>
                 <configuration>
                     <configLocation>checkstyle.xml</configLocation>
                     <consoleOutput>true</consoleOutput>
                     <failsOnError>true</failsOnError>
-                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
                 </configuration>
                 <executions>
                     <execution>
                         <phase>validate</phase>
                         <goals><goal>check</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals><goal>report</goal></goals>
                     </execution>
                 </executions>
             </plugin>
