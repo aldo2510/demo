@@ -1,4 +1,4 @@
-name: Insurance Core API - CI
+name: Insurance Core API - Build
 
 on:
   push:
