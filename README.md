@@ -2,12 +2,37 @@
 
 Backend REST construido con Java 25, Spring Boot 4.1.0 y Maven.
 
+Spring Boot 4.x tiene soporte de primera clase para Java 25 y Maven 3.6.3+ es compatible. citeturn0search0turn0search2
+
 ## Endpoints
 
-- `GET /api/v1/hello` — saludo y contador en memoria.
-- `GET /api/v1/status` — estado de la aplicación y versión de Java.
-- `GET /api/v1/requests` — historial reciente de requests almacenado en memoria.
-- `GET /api/v1/github/repos/{owner}/{repo}` — consulta información pública de un repositorio usando la API de GitHub.
+| Método | Endpoint | Propósito |
+|---|---|---|
+| GET | `/api/v1/hello` | Saludo y contador global de requests. |
+| GET | `/api/v1/status` | Estado, versión de Java y contador. |
+| GET | `/api/v1/memory` | Datos precargados en memoria + requests recientes. |
+| GET | `/api/v1/requests` | Historial reciente de requests en memoria. |
+| GET | `/api/v1/github/repos/{owner}/{repo}` | Consulta la API pública de GitHub. |
+| GET | `/actuator/health` | Health check de Spring Boot Actuator. |
+
+## Ejemplos
+
+```bash
+curl http://localhost:8080/api/v1/hello
+curl http://localhost:8080/api/v1/status
+curl http://localhost:8080/api/v1/memory
+curl http://localhost:8080/api/v1/github/repos/aldo2510/demo
+curl http://localhost:8080/actuator/health
+```
+
+## Arquitectura
+
+- `api/`: controllers REST.
+- `service/`: lógica de negocio y cliente de API externa.
+- `record`: DTO inmutable para la respuesta de GitHub.
+- `ConcurrentLinkedDeque` + `AtomicLong`: almacenamiento seguro en memoria.
+- Actuator: endpoint de health check.
+- Checkstyle: validación estática durante `mvn verify`.
 
 ## Ejecutar
 
@@ -21,4 +46,12 @@ mvn spring-boot:run
 mvn clean verify
 ```
 
-La CI de GitHub Actions ejecuta validaciones con Java 25, cache de Maven, tests, Checkstyle y empaqueta el JAR.
+## CI
+
+GitHub Actions ejecuta en cada push a `main` y en Pull Requests:
+
+1. Checkout.
+2. Java 25 Temurin.
+3. Cache de dependencias Maven.
+4. `mvn clean verify` — compilación, tests, Checkstyle y empaquetado.
+5. Publicación del JAR como artifact de CI.
