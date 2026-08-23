@@ -1,0 +1,61 @@
+name: Dynatrace Pipeline Observability - POC
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/dynatrace-observability
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-observability:
+    name: Build, test and publish pipeline telemetry
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Run Maven verification
+        id: maven
+        continue-on-error: true
+        run: mvn -B -ntp clean verify
+
+      - name: Collect pipeline metadata
+        if: always()
+        run: |
+          echo "workflow=${{ github.workflow }}" >> "$GITHUB_ENV"
+          echo "repository=${{ github.repository }}" >> "$GITHUB_ENV"
+          echo "branch=${{ github.ref_name }}" >> "$GITHUB_ENV"
+          echo "commit=${{ github.sha }}" >> "$GITHUB_ENV"
+          echo "run_id=${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "maven_outcome=${{ steps.maven.outcome }}" >> "$GITHUB_ENV"
+
+      - name: Publish pipeline event to Dynatrace
+        if: always() && env.DYNATRACE_ENV_URL != ''
+        env:
+          DYNATRACE_ENV_URL: ${{ secrets.DYNATRACE_ENV_URL }}
+          DYNATRACE_API_TOKEN: ${{ secrets.DYNATRACE_API_TOKEN }}
+        run: |
+          echo "Dynatrace endpoint configured."
+          echo "Workflow: ${{ github.workflow }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Run: ${{ github.run_id }}"
+          echo "Maven result: ${{ steps.maven.outcome }}"
+          echo ""
+          echo "POC placeholder: the next step will replace this with the Dynatrace SDLC Events API call after the tenant endpoint and token are configured."
+
+      - name: Fail if build failed
+        if: steps.maven.outcome == 'failure'
+        run: exit 1
