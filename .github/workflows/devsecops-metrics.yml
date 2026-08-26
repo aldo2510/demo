@@ -7,6 +7,10 @@ on:
       - 'metrics/**'
       - '.github/workflows/devsecops-metrics.yml'
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   metrics:
     runs-on: ubuntu-latest
@@ -22,8 +26,16 @@ jobs:
       - name: Generate metrics readout
         run: python metrics/devsecops_metrics.py | tee devsecops-metrics-report.txt
 
-      - name: Publish report
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: metrics/devsecops-results.sarif
+          category: devsecops-metrics-lab
+
+      - name: Publish reports
         uses: actions/upload-artifact@v4
         with:
           name: devsecops-metrics-report
-          path: devsecops-metrics-report.txt
+          path: |
+            devsecops-metrics-report.txt
+            metrics/devsecops-results.sarif
