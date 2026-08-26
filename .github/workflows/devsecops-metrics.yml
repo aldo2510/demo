@@ -29,43 +29,8 @@ jobs:
       - name: Generate SARIF security results
         run: python metrics/generate_sarif.py
 
-      - name: Publish complete lab summary
-        run: |
-          {
-            echo '# DevSecOps Metrics Lab'
-            echo ''
-            echo '## 1. Complete metrics readout'
-            echo ''
-            echo '```text'
-            cat devsecops-metrics-report.txt
-            echo '```'
-            echo ''
-            echo '## 2. SARIF findings'
-            echo ''
-            echo '| Rule | Level | Severity | Category | Location | Message |'
-            echo '|---|---|---|---|---|---|'
-            python - <<'PY'
-          import json
-          from pathlib import Path
-          sarif = json.loads(Path('devsecops-results.sarif').read_text(encoding='utf-8'))
-          run = sarif['runs'][0]
-          rules = {r['id']: r for r in run['tool']['driver']['rules']}
-          for result in run['results']:
-              rule_id = result['ruleId']
-              rule = rules.get(rule_id, {})
-              props = result.get('properties', {})
-              loc = result.get('locations', [{}])[0].get('physicalLocation', {})
-              artifact = loc.get('artifactLocation', {}).get('uri', '-')
-              line = loc.get('region', {}).get('startLine', '-')
-              message = result.get('message', {}).get('text', rule.get('shortDescription', {}).get('text', '-'))
-              message = message.replace('|', '\\|').replace('\n', ' ')
-              print(f"| {rule_id} | {result.get('level', '-')} | {props.get('severity', '-')} | {props.get('category', '-')} | `{artifact}:{line}` | {message} |")
-          PY
-            echo ''
-            echo '## 3. SARIF artifact'
-            echo ''
-            echo 'The raw SARIF file is also uploaded as a workflow artifact and published to GitHub Code Scanning.'
-          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Build executive dashboard
+        run: python metrics/generate_summary.py >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload SARIF to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
