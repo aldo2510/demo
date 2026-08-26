@@ -1,2 +1,8 @@
 # Every exception must be narrow, justified and reviewable.
 # The exercise intentionally contains one documented HIGH false positive.
+exceptions:
+  - rule_id: insurance.dynamic-uri
+    file: src/main/java/com/fictitious/insurance/securitylab/SecurityLabExamples.java
+    reason: "The URI reference is produced by the trusted internal risk integration; this lab method does not receive HTTP request input."
+    owner: "appsec-training"
+    review_date: "2026-12-31"
