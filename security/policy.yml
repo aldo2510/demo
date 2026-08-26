@@ -1,0 +1,16 @@
+blocking_severities:
+  - CRITICAL
+  - HIGH
+
+non_blocking_severities:
+  - MEDIUM
+  - LOW
+
+minimum_confidence_to_block: HIGH
+
+false_positive_requirements:
+  - rule_id
+  - file
+  - reason
+  - owner
+  - review_date
