@@ -1,0 +1,48 @@
+rules:
+  - id: insurance.command-injection
+    languages: [java]
+    message: User-controlled input reaches Runtime.exec and can enable command injection.
+    severity: ERROR
+    metadata:
+      category: security
+      severity: CRITICAL
+      confidence: HIGH
+      security-severity: "9.8"
+      exercise: false-positive-management
+    patterns:
+      - pattern: Runtime.getRuntime().exec($COMMAND)
+    paths:
+      include:
+        - src/main/java/com/fictitious/insurance/securitylab/**
+
+  - id: insurance.dynamic-uri
+    languages: [java]
+    message: Dynamic URI construction requires security review.
+    severity: ERROR
+    metadata:
+      category: security
+      severity: HIGH
+      confidence: HIGH
+      security-severity: "8.0"
+      exercise: false-positive-management
+    patterns:
+      - pattern: URI.create($VALUE)
+    paths:
+      include:
+        - src/main/java/com/fictitious/insurance/securitylab/**
+
+  - id: insurance.console-log
+    languages: [java]
+    message: Console logging may expose implementation details.
+    severity: WARNING
+    metadata:
+      category: security
+      severity: MEDIUM
+      confidence: MEDIUM
+      security-severity: "5.0"
+      exercise: false-positive-management
+    patterns:
+      - pattern: System.out.println($VALUE)
+    paths:
+      include:
+        - src/main/java/com/fictitious/insurance/securitylab/**
