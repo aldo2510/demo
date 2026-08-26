@@ -1,408 +1,714 @@
-# False Positive Management — GHAS / CodeQL
+# Laboratorio DevSecOps — Gestión de Falsos Positivos, Criticidad y Quality Gate
 
-## Objetivo
+> **Objetivo del laboratorio:** convertir un pipeline de seguridad ruidoso en un gate accionable, usando clasificación por criticidad, configuración centralizada, excepciones auditables y separación entre findings que bloquean y findings que deben quedar para revisión.
 
-Este ejercicio enseña a gestionar correctamente un **false positive** detectado por una herramienta de seguridad sin convertir la excepción en una forma de desactivar el análisis.
+## Duración
 
-La regla principal es:
+**Tiempo recomendado: 120–150 minutos.**
 
-> **No se debe silenciar un finding solamente porque bloquea el pipeline. Primero se demuestra que no aplica, se documenta la decisión y se aplica la excepción con el alcance mínimo posible.**
+- 10 min — Preparación y lectura del escenario
+- 15 min — Levantamiento del baseline
+- 25 min — Triage y clasificación de findings
+- 20 min — Diseño de política por criticidad
+- 25 min — Implementación de configuración y Quality Gate
+- 15 min — Gestión documentada de falsos positivos
+- 10 min — Validación con PR y re-run
+- 10–30 min — Desafío opcional / discusión empresarial
 
-## ¿Qué es un falso positivo?
+La versión completa está pensada para ocupar prácticamente una sesión larga de laboratorio, especialmente si se pide al alumno justificar cada decisión antes de modificar el repositorio.
 
-Un false positive ocurre cuando una herramienta reporta un posible problema de seguridad o calidad, pero después de analizar el contexto se determina que el código **no representa realmente el riesgo indicado**.
+---
 
-Ejemplo conceptual:
+## 1. Contexto
 
-```text
-CodeQL encuentra un posible riesgo
-            |
-            v
-       ¿Es real?
-        /     \
-      SI       NO
-      |         |
-      v         v
-  Corregir   Investigar
-                |
-                v
-          Documentar evidencia
-                |
-                v
-          Aplicar excepción
-          mínima y explícita
-```
+El repositorio es una **Insurance Core API** construida con Java 25, Spring Boot 4.1 y Maven. La aplicación expone operaciones de clientes, pólizas, siniestros y una integración externa de riesgo. El repositorio ya tiene un workflow de GitHub Actions que ejecuta compilación, pruebas, Checkstyle, JaCoCo y empaquetado; además existe un workflow de Dependency Review. El laboratorio parte de ese pipeline y lo evoluciona hacia una política de seguridad orientada al riesgo.
 
-## Importante: false positive != false negative
+La presentación del curso plantea cuatro ideas que usaremos directamente:
 
-- **False positive:** la herramienta alerta, pero el riesgo no aplica.
-- **False negative:** existe un riesgo, pero la herramienta no lo detecta.
+- reducir el **ruido** para evitar alert fatigue;
+- investigar el contexto antes de marcar un finding como false positive;
+- preferir excepciones de **mínimo alcance**;
+- permitir que el Quality Gate sea estricto donde el riesgo realmente importa.
 
-Este ejercicio solamente aborda el primer caso.
+En la presentación, el false positive se define como una alerta que no representa realmente una vulnerabilidad en el contexto actual; también se diferencia de un false negative, donde el riesgo existe pero la herramienta no lo detecta. Asimismo, se propone el uso de severidad + confidence para decidir qué bloquea y qué se deriva a revisión asíncrona.
 
-## Estrategia recomendada
+---
 
-El proceso recomendado es:
+## 2. Reto del laboratorio
 
-1. Identificar el finding.
-2. Entender qué regla lo generó.
-3. Revisar el código y el flujo de datos.
-4. Confirmar si el riesgo es real.
-5. Si es real → corregirlo.
-6. Si no aplica → recopilar evidencia.
-7. Registrar quién tomó la decisión y por qué.
-8. Aplicar una excepción con el menor alcance posible.
-9. Revisar periódicamente la excepción.
+El equipo de desarrollo se queja de que cualquier finding termina bloqueando el Pull Request.
 
-## Paso 1 — Encontrar el finding
+La nueva política solicitada por el equipo de AppSec es:
 
-En GitHub entra en:
-
-```text
-Security
-  -> Code scanning
-```
-
-Selecciona el finding y revisa:
-
-- Rule ID
-- Severidad
-- Archivo
-- Línea
-- Mensaje
-- Data flow, si está disponible
-- Fecha de detección
-
-No marques inmediatamente el finding como falso positivo.
-
-## Paso 2 — Entender la regla
-
-Antes de excluir una alerta, responde:
-
-```text
-¿Qué está buscando esta regla?
-¿Por qué cree que este código es vulnerable?
-¿Qué entrada controla el usuario?
-¿Existe realmente un flujo hacia el sink peligroso?
-¿Hay validación, sanitización o encoding?
-¿Existe una capa de protección adicional?
-```
-
-La pregunta clave es:
-
-> ¿Podemos demostrar técnicamente que la condición requerida por la regla no se cumple?
-
-## Paso 3 — Clasificar el resultado
-
-Usa una clasificación sencilla:
-
-| Resultado | Acción |
+| Criticidad | Comportamiento esperado |
 |---|---|
-| Vulnerabilidad real | Corregir |
-| Finding válido pero riesgo aceptado | Registrar aceptación y seguir proceso de riesgo |
-| False positive demostrado | Excepción documentada |
-| No hay suficiente evidencia | Mantener abierto e investigar |
+| **CRITICAL** | Bloquea el PR |
+| **HIGH** | Bloquea el PR |
+| **MEDIUM** | No bloquea; queda visible para tratamiento |
+| **LOW** | No bloquea; queda visible para seguimiento |
+| **FALSE POSITIVE** | No bloquea, pero exige evidencia y trazabilidad |
+| **RISK ACCEPTED** | No se trata como false positive; requiere proceso de riesgo |
 
-No debemos utilizar `false positive` como sinónimo de `no quiero corregirlo`.
+### Regla de oro
 
-## Paso 4 — Documentar la evidencia
+> **No queremos que el pipeline pase porque dejamos de analizar. Queremos que pase porque hemos decidido qué debe bloquear y qué debe gestionarse fuera del camino crítico.**
 
-Para un false positive real, registra como mínimo:
+---
+
+## 3. Antes de tocar el código: baseline
+
+### 3.1. Clonar el repositorio
+
+```bash
+git clone https://github.com/aldo2510/insurance-core-api.git
+cd insurance-core-api
+```
+
+### 3.2. Cambiar a la rama del laboratorio
+
+```bash
+git checkout exercise/false-positive-management
+```
+
+### 3.3. Ejecutar el estado inicial
+
+```bash
+mvn -B -ntp clean verify
+```
+
+Documenta:
+
+- duración del build;
+- resultado de pruebas;
+- resultado de Checkstyle;
+- cobertura JaCoCo;
+- artifacts generados;
+- estado del workflow en GitHub Actions.
+
+### Pregunta de análisis
+
+> ¿Qué parte del pipeline actual es un verdadero Quality Gate y qué parte solamente ejecuta una herramienta?
+
+**No modifiques nada todavía.**
+
+---
+
+## 4. Levantamiento de la política
+
+Antes de configurar una herramienta, crea una matriz de decisión.
+
+### Matriz inicial
+
+| Severidad | ¿Bloquea? | ¿Requiere revisión humana? | ¿Puede ser FP? |
+|---|---:|---:|---:|
+| CRITICAL | Sí | Sí | Sí, con evidencia fuerte |
+| HIGH | Sí | Sí | Sí, con evidencia fuerte |
+| MEDIUM | No | Sí | Sí |
+| LOW | No | Opcional | Sí |
+
+Completa la matriz incluyendo:
+
+- owner;
+- SLA de tratamiento;
+- fecha de revisión;
+- tratamiento de legacy;
+- comportamiento en Pull Request;
+- comportamiento en branch principal.
+
+### Debate
+
+¿Por qué conviene bloquear solamente HIGH/CRITICAL en vez de hacer `continue-on-error: true` sobre todo el análisis?
+
+La presentación advierte explícitamente que hacer que el pipeline ignore globalmente el resultado destruye el objetivo del Quality Gate.
+
+---
+
+## 5. Identificar el tipo de finding
+
+Clasifica cada hallazgo encontrado en una de estas categorías:
+
+```text
+A. True Positive
+B. False Positive
+C. Risk Accepted
+D. False Negative sospechado
+E. Evidencia insuficiente
+```
+
+### Criterios
+
+**True Positive**
+- el riesgo existe;
+- el flujo es explotable o el comportamiento inseguro es válido en el contexto;
+- requiere remediación.
+
+**False Positive**
+- la herramienta detecta un patrón;
+- el análisis del contexto demuestra que la condición de riesgo no se cumple;
+- la excepción debe quedar documentada.
+
+**Risk Accepted**
+- el finding es válido;
+- la organización decide no remediarlo inmediatamente;
+- debe seguir un proceso de aceptación de riesgo.
+
+**Evidencia insuficiente**
+- todavía no puedes demostrar que el riesgo no aplica;
+- el finding permanece abierto.
+
+---
+
+## 6. Triage técnico
+
+Para cada finding, documenta como mínimo:
 
 ```text
 Rule ID:
+Severidad:
 Archivo:
 Línea:
-Fecha:
-Responsable:
-
-Descripción del finding:
-
-Por qué la herramienta lo detectó:
-
-Análisis técnico:
-
-Evidencia de que el riesgo no aplica:
-
-Mitigación existente:
-
-Decisión:
-
-Fecha de próxima revisión:
+Fuente del dato:
+Sink:
+Ruta del dato:
+Controles existentes:
+Contexto funcional:
+Resultado del análisis:
+Owner:
+Fecha de revisión:
 ```
 
-### Ejemplo
+### Preguntas obligatorias
+
+1. ¿Qué regla generó el finding?
+2. ¿Qué patrón está buscando?
+3. ¿Existe una fuente controlada por el usuario?
+4. ¿Existe realmente el sink peligroso?
+5. ¿Existe sanitización, validación o encoding?
+6. ¿Hay una capa adicional de protección?
+7. ¿La herramienta entiende correctamente el framework?
+8. ¿El hallazgo puede reproducirse?
+9. ¿Qué cambia si modificamos una sola condición del código?
+
+---
+
+# 7. Ejercicio principal: configurar un Quality Gate orientado a criticidad
+
+## Objetivo
+
+Construir un gate con esta lógica:
 
 ```text
-Rule ID: java/example-rule
-Archivo: src/main/java/.../InsuranceController.java
-
-Finding:
-La herramienta identifica un posible flujo de entrada no confiable.
-
-Análisis:
-El valor señalado no llega directamente a un sink peligroso. Antes
-pasa por la capa InsuranceValidator, que aplica validación estructural
-permitida por el contrato de la API.
-
-Evidencia:
-- El endpoint requiere @Valid.
-- El DTO restringe el formato permitido.
-- InsuranceValidator rechaza valores fuera del dominio permitido.
-- No existe flujo directo hacia el sink identificado.
-
-Decisión:
-False positive.
-
-Revisión:
-Revisar si cambia la implementación del validador.
+                    Finding
+                       |
+             +---------+---------+
+             |                   |
+       HIGH / CRITICAL      MEDIUM / LOW
+             |                   |
+           BLOCK             NO BLOCK
+             |                   |
+             v                   v
+       Quality Gate FAIL     Quality Gate PASS
 ```
 
-## Paso 5 — Preferir una excepción de mínimo alcance
+### Requisito adicional
 
-No hagas esto:
+El gate **no debe** desactivar el análisis para MEDIUM/LOW.
+
+Los findings siguen generándose; simplemente no bloquean el flujo crítico.
+
+---
+
+## 8. Configuración del repositorio
+
+Inspecciona primero la estructura actual:
+
+```bash
+find .github -maxdepth 3 -type f | sort
+```
+
+Revisa especialmente:
 
 ```text
-Desactivar CodeQL completo
-Desactivar toda una categoría
-Ignorar todos los findings de un archivo
+.github/workflows/build.yml
+.github/workflows/dependency-review.yml
+pom.xml
+checkstyle.xml
 ```
 
-Preferir:
+El objetivo es identificar qué puede convertirse en configuración centralizada y qué debe mantenerse en el código.
+
+### Tarea
+
+Diseña una configuración equivalente a:
 
 ```text
-Excepción para un finding concreto
-Excepción para una regla concreta cuando sea estrictamente necesario
-Excepción en el punto más pequeño posible
+.github/
+├── workflows/
+│   ├── build.yml
+│   ├── dependency-review.yml
+│   └── security-quality-gate.yml
+└── security/
+    └── policy.yml
 ```
 
-El principio es **least privilege aplicado a las excepciones de seguridad**.
-
-## Paso 6 — ¿Cómo gestionar el false positive en GitHub?
-
-GitHub permite gestionar los resultados de Code Scanning desde la interfaz de Security.
-
-Dependiendo de la configuración y del tipo de análisis, un finding puede ser cerrado/clasificado con una razón apropiada.
-
-Para este ejercicio, la clasificación debe quedar acompañada de una explicación técnica en el proceso de revisión.
-
-La excepción no debe depender únicamente de que alguien haga clic en `Dismiss` sin dejar evidencia.
-
-## Paso 7 — Cuando necesitas una supresión en el código
-
-Algunas herramientas permiten utilizar mecanismos de supresión específicos.
-
-Antes de utilizarlos, evalúa:
-
-```text
-¿La supresión aplica solamente a este finding?
-¿La herramienta soporta una supresión segura y auditable?
-¿Se puede explicar por qué es necesaria?
-¿La supresión podría ocultar futuros problemas?
-```
-
-Evita comentarios genéricos como:
-
-```java
-// ignore security
-```
-
-Una excepción debe ser específica y justificable.
-
-## Paso 8 — El pipeline NO debe ignorar todo
-
-Una mala solución sería modificar el workflow para hacer algo como:
+La política puede contener, como mínimo:
 
 ```yaml
-continue-on-error: true
+severity:
+  blocking:
+    - CRITICAL
+    - HIGH
+  non_blocking:
+    - MEDIUM
+    - LOW
+
+false_positive:
+  require_comment: true
+  require_owner: true
+  require_review_date: true
 ```
 
-sobre CodeQL o sobre el Quality Gate completo.
+> **Nota:** el formato anterior es parte del ejercicio pedagógico. No se exige que una herramienta concreta consuma exactamente este YAML; el participante debe adaptar la política al mecanismo de análisis elegido.
 
-Eso transforma:
+---
+
+# 9. Diseñar el pipeline
+
+El flujo esperado es:
 
 ```text
-Security finding -> pipeline FAIL
+Push / Pull Request
+        |
+        v
+ Build + Tests
+        |
+        v
+ Security Scan
+        |
+        v
+ Normalize Findings
+        |
+        v
+ Apply Severity Policy
+        |
+   +----+----+
+   |         |
+ HIGH/CRIT  MED/LOW
+   |         |
+ BLOCK    REPORT ONLY
+   |         |
+   +----+----+
+        |
+        v
+  Quality Gate
 ```
 
-en:
+### Reglas
+
+- Nunca uses `continue-on-error: true` para apagar globalmente el gate.
+- El análisis sigue ejecutándose.
+- Solo la decisión de bloqueo depende de criticidad.
+- La política debe ser visible y revisable en Git.
+
+---
+
+# 10. Falsos positivos: el caso que rompe el pipeline
+
+Crea un escenario donde la herramienta marque un finding que después pueda demostrarse como falso positivo.
+
+El caso debe utilizar el dominio de **Insurance Core API**, por ejemplo:
+
+- validación de entradas de customer;
+- filtros de policy;
+- estado de claim;
+- referencia externa de risk.
+
+### El ejercicio no consiste en escribir una excepción inmediatamente.
+
+Primero debes construir la evidencia.
+
+### Evidencia mínima
 
 ```text
-Security finding -> pipeline PASS
+1. Finding original
+2. Regla
+3. Severidad
+4. Código involucrado
+5. Flujo del dato
+6. Control compensatorio
+7. Demostración de que la condición requerida por la regla no se cumple
+8. Justificación de FP
 ```
 
-Y destruye el objetivo del Quality Gate.
+---
 
-La excepción debe gestionarse en el nivel del finding o de la política, no apagando el gate entero.
+# 11. Gestión del false positive
 
-## Paso 9 — Revisar las excepciones periódicamente
-
-Una excepción de seguridad no debería convertirse en permanente por accidente.
-
-Recomendación:
+Cuando exista evidencia suficiente, registra:
 
 ```text
-Finding dismissed
-       |
-       v
-Documented justification
-       |
-       v
-Owner assigned
-       |
-       v
-Review date
-       |
-       v
-Periodic review
+Estado: FALSE POSITIVE
+Rule ID: <id>
+Severidad: <severity>
+Owner: <equipo/persona>
+Fecha: <fecha>
+Review date: <fecha>
+
+Justificación:
+<explicación técnica>
+
+Evidencia:
+- <evidencia 1>
+- <evidencia 2>
+- <evidencia 3>
+
+Impacto del cambio:
+<qué riesgo residual queda>
 ```
 
-Cuando cambia el código, la arquitectura o la regla de seguridad, la excepción debe volver a evaluarse.
+### Regla de mínimo alcance
 
-## Ejercicio práctico
-
-### Escenario
-
-Imagina que CodeQL reporta un finding en un endpoint de seguros.
-
-El pipeline falla:
+Preferencia:
 
 ```text
-CodeQL             FAIL
-Final Quality Gate FAIL
-PR                   BLOCKED
+finding específico
+      > regla específica
+      > archivo específico
+      > proyecto completo
+      > herramienta completa
 ```
 
-### Actividad 1 — Investigar
-
-Determina:
-
-- Rule ID.
-- Severidad.
-- Archivo y línea.
-- Fuente del dato.
-- Sink identificado.
-- Validaciones existentes.
-
-### Actividad 2 — Tomar una decisión
-
-Elige una de estas opciones:
+No aceptamos:
 
 ```text
-A. Vulnerabilidad real -> corregir
-B. False positive -> documentar y gestionar excepción
-C. Riesgo aceptado -> seguir proceso formal de riesgo
-D. Evidencia insuficiente -> mantener finding abierto
+Desactivar CodeQL
+Desactivar SAST
+Ignorar carpeta completa
+Ignorar todos los findings
 ```
 
-### Actividad 3 — Demostrar el cambio
+---
 
-Después de aplicar la solución:
+# 12. Confidence Score
+
+La presentación propone combinar severidad y confianza. Una política didáctica puede ser:
 
 ```text
-CodeQL
-   |
-   v
-Re-run
-   |
-   +---- finding corregido
-   |
-   +---- finding gestionado correctamente
-   |
-   v
-Final Quality Gate
-   |
-   v
-PASS
+BLOCK =
+  (severity IN [HIGH, CRITICAL])
+  AND
+  (confidence >= 90)
 ```
 
-## Buenas prácticas empresariales
-
-### 1. No permitir auto-dismiss indiscriminado
-
-Las excepciones deberían tener trazabilidad.
-
-### 2. Separar seguridad de conveniencia
-
-No clasificar un finding como false positive únicamente porque corregirlo requiere trabajo.
-
-### 3. Tener ownership
-
-Cada excepción debería tener un responsable técnico o equipo responsable.
-
-### 4. Usar expiración o revisión
-
-Cuando sea posible, establecer una fecha de revisión.
-
-### 5. Medir excepciones
-
-Puedes medir:
+Mientras que:
 
 ```text
-Total findings
-Total false positives
-False positive rate
-Open exceptions
-Expired exceptions
-Exceptions by team
-Exceptions by severity
+NO BLOCK =
+  (severity IN [LOW, MEDIUM])
+  OR
+  (confidence < 90)
 ```
 
-### 6. Revisar especialmente High/Critical
+### Pregunta clave
 
-Un finding de alta severidad necesita evidencia mucho más fuerte antes de ser descartado.
+¿Qué ocurre con un **CRITICAL con confidence 70%**?
 
-## Qué NO hacer
+El alumno debe justificar si la organización prefiere:
 
-❌ Desactivar CodeQL.
+- bloquear por severidad;
+- derivar a triage humano;
+- usar una combinación severidad + confidence.
 
-❌ Ignorar todos los findings de una carpeta.
+**No existe una respuesta universal. Lo importante es justificar la política.**
 
-❌ Añadir `continue-on-error: true` al análisis de seguridad.
+---
 
-❌ Marcar todo como false positive para conseguir un pipeline verde.
+# 13. Escenario avanzado: dos PRs
 
-❌ Copiar una supresión sin entender la regla.
+Para maximizar el ejercicio, trabaja con dos ramas o dos Pull Requests conceptuales.
 
-❌ Mantener excepciones sin owner ni revisión.
+## PR #1 — Ruido
 
-## Modelo de gobierno recomendado
+Introduce findings LOW/MEDIUM y un supuesto false positive.
+
+Resultado esperado:
+
+```text
+Scan: PASS
+Gate: PASS
+PR: NO BLOCK
+Findings: visibles
+```
+
+## PR #2 — Riesgo real
+
+Introduce un finding HIGH o CRITICAL controlado para que el pipeline tenga que bloquear.
+
+Resultado esperado:
+
+```text
+Scan: FINDING
+Gate: FAIL
+PR: BLOCKED
+```
+
+### Objetivo pedagógico
+
+Demostrar que:
+
+> **Reducir falsos positivos no significa reducir sensibilidad frente a los riesgos críticos.**
+
+---
+
+# 14. Experimento de tuning
+
+Realiza tres ejecuciones modificando únicamente la política.
+
+### Experimento A — Todo bloquea
+
+```text
+LOW      -> BLOCK
+MEDIUM   -> BLOCK
+HIGH     -> BLOCK
+CRITICAL -> BLOCK
+```
+
+Registra el impacto en feedback y ruido.
+
+### Experimento B — Solo HIGH/CRITICAL
+
+```text
+LOW      -> PASS
+MEDIUM   -> PASS
+HIGH     -> BLOCK
+CRITICAL -> BLOCK
+```
+
+Registra qué findings siguen visibles.
+
+### Experimento C — Severidad + confianza
+
+```text
+HIGH/CRITICAL + confidence >= 90 -> BLOCK
+HIGH/CRITICAL + confidence < 90  -> TRIAGE
+LOW/MEDIUM                       -> PASS
+```
+
+Compara los tres modelos.
+
+---
+
+# 15. Configuración de ramas y Pull Requests
+
+Como parte del ejercicio, revisa la configuración del repositorio y decide qué controles deberían existir en `main`.
+
+Propuesta:
+
+```text
+main
+ ├── Pull Request obligatorio
+ ├── Require status checks
+ ├── Security Quality Gate requerido
+ ├── Review requerido
+ └── No merge si HIGH/CRITICAL bloquea
+```
+
+### Preguntas
+
+- ¿Qué status check debe ser obligatorio?
+- ¿Qué ocurre si el escaneo no está disponible?
+- ¿Qué ocurre si el pipeline falla por infraestructura y no por seguridad?
+- ¿Quién puede modificar la política?
+- ¿Quién puede aprobar excepciones?
+
+---
+
+# 16. Audit Trail
+
+Toda excepción debe dejar trazabilidad.
+
+Crea una tabla o registro con:
+
+| Finding | Severity | Decision | Owner | Date | Review Date |
+|---|---|---|---|---|---|
+| ... | ... | FALSE POSITIVE | ... | ... | ... |
+
+### Métrica final
+
+Calcula:
+
+```text
+False Positive Rate =
+False Positives / Total Findings * 100
+```
+
+Y además:
+
+```text
+% de findings que bloquean
+% de findings no bloqueantes
+% de excepciones con owner
+% de excepciones vencidas
+```
+
+---
+
+# 17. Desafío adicional — SCA
+
+La presentación dedica una sección específica a falsos positivos en SCA y **Reachability Analysis**.
+
+Plantea este escenario:
+
+> Una dependencia tiene una vulnerabilidad conocida, pero el código de la aplicación no alcanza la función vulnerable.
+
+Investiga:
+
+```text
+¿La dependencia está realmente en ejecución?
+¿Qué módulo importa la librería?
+¿Qué función vulnerable se supone que es alcanzable?
+¿Hay un camino de ejecución desde la aplicación?
+```
+
+### Resultado esperado
+
+No descartes una vulnerabilidad únicamente porque “no la usamos”.
+
+Demuestra técnicamente la **reachability** o la ausencia de ella.
+
+---
+
+# 18. Desafío adicional — Secret Scanning
+
+Crea un dato sintético de alta entropía que parezca un secreto, pero que no sea un token real.
+
+Ejemplo:
+
+```text
+INTERNAL_REFERENCE=7f8f5e8a1c0d4f91b6b9e3a5c7d2e1f0
+```
+
+Investiga:
+
+- por qué podría ser detectado;
+- qué patrón utiliza el detector;
+- cómo diferenciar un ID de un secreto real;
+- qué controles adicionales evitarían falsos positivos.
+
+**Nunca uses credenciales reales para este laboratorio.**
+
+---
+
+# 19. Desafío final — Gobierno
+
+Diseña una política para una organización con cientos de desarrolladores.
+
+Debe responder:
+
+1. ¿Quién puede marcar un false positive?
+2. ¿Quién aprueba una excepción HIGH/CRITICAL?
+3. ¿Qué evidencia es obligatoria?
+4. ¿Cuándo expira una excepción?
+5. ¿Quién la revisa?
+6. ¿Cómo se mide el ruido?
+7. ¿Cómo se evita que una excepción se convierta en una vulnerabilidad silenciosa?
+8. ¿Qué ocurre cuando cambia la arquitectura?
+
+### Modelo sugerido
 
 ```text
 Developer
    |
    v
-Finding
+Security Finding
    |
    v
-Security/Engineering Review
+Triage
    |
-   +--> Real vulnerability ----> Fix
-   |
-   +--> False positive --------> Evidence + Exception
-   |
-   +--> Risk accepted ---------> Risk process
-   |
-   v
-Quality Gate
-   |
-   v
-Merge
+ +------+----------------+
+ |      |                |
+ v      v                v
+TP     FP          Risk Accepted
+ |      |                |
+Fix   Evidence           Risk Process
+ |      |                |
+ +------+----------------+
+        |
+        v
+ Quality Gate
+        |
+        v
+      Merge
 ```
 
-## Resultado esperado
+---
 
-Al terminar este laboratorio debes poder explicar:
+# 20. Criterios de aceptación
 
-1. Qué es un false positive.
-2. Cómo distinguirlo de una vulnerabilidad real.
-3. Cómo investigar un finding de CodeQL.
-4. Qué evidencia necesitas para descartarlo.
-5. Por qué no se debe apagar CodeQL.
-6. Cómo aplicar una excepción de mínimo alcance.
-7. Cómo mantener trazabilidad y ownership.
-8. Por qué las excepciones deben revisarse periódicamente.
+El laboratorio está completo cuando puedas demostrar todo lo siguiente:
 
-### Regla de oro
+- [ ] El pipeline analiza seguridad sin ser desactivado.
+- [ ] HIGH y CRITICAL bloquean el PR.
+- [ ] LOW y MEDIUM siguen siendo visibles pero no bloquean.
+- [ ] Existe una política de severidad versionada.
+- [ ] Existe una prueba de un finding real que bloquea.
+- [ ] Existe una prueba de un false positive documentado.
+- [ ] La excepción tiene owner y fecha de revisión.
+- [ ] No se utiliza `continue-on-error` para ignorar seguridad.
+- [ ] La excepción es de mínimo alcance.
+- [ ] Se conserva audit trail.
+- [ ] Se calculan métricas de ruido y excepciones.
+- [ ] El alumno puede explicar la diferencia entre TP, FP, FN y TN.
 
-> **Primero demostrar que no es vulnerable; después gestionar la excepción. Nunca al revés.**
+---
+
+# 21. Preguntas para discusión final
+
+### Pregunta 1
+
+¿Es correcto dejar pasar todos los MEDIUM?
+
+### Pregunta 2
+
+¿Es correcto bloquear todos los HIGH sin revisar contexto?
+
+### Pregunta 3
+
+¿Un false positive deja de ser importante porque no bloquea?
+
+### Pregunta 4
+
+¿Qué pasa si una regla se convierte en un generador permanente de ruido?
+
+### Pregunta 5
+
+¿Conviene resolver el problema en la herramienta, en el código, en el pipeline o en la política?
+
+### Pregunta 6
+
+¿Qué métrica demuestra que realmente reducimos ruido y no solamente ocultamos findings?
+
+---
+
+# 22. Entregables del alumno
+
+Al finalizar, entrega:
+
+1. La política de severidad implementada.
+2. El pipeline actualizado.
+3. Un Pull Request que demuestre el bloqueo por HIGH/CRITICAL.
+4. Un Pull Request o commit que demuestre el tratamiento de un false positive.
+5. La evidencia del triage.
+6. La matriz de clasificación.
+7. Las métricas finales.
+8. Una explicación de 5 minutos sobre por qué el nuevo gate es mejor que bloquear todo.
+
+---
+
+# 23. Resultado esperado
+
+El alumno debe terminar con un concepto central:
+
+> **La madurez DevSecOps no consiste en tener más alertas. Consiste en tener alertas más confiables, una política clara para bloquear y una gestión trazable para el resto.**
+
+Este laboratorio debe reforzar exactamente el flujo de la presentación: triage, tuning, análisis contextual, severidad, confidence, gestión del false positive, audit trail y mejora continua.
