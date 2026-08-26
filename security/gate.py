@@ -49,6 +49,18 @@ def validate_exception(item):
         )
 
 
+def normalize_rule_id(rule_id):
+    """Normalize Semgrep's local-config namespace when present.
+
+    Some Semgrep execution modes expose local rule IDs with a `security.`
+    namespace (for example `security.insurance.dynamic-uri`) even though the
+    rule itself is declared as `insurance.dynamic-uri`. The exception registry
+    intentionally stores the rule ID declared in the rule pack.
+    """
+    prefix = "security."
+    return rule_id[len(prefix):] if rule_id.startswith(prefix) else rule_id
+
+
 def main():
     report_path = sys.argv[1]
     report = json.load(open(report_path, encoding="utf-8"))
@@ -58,7 +70,7 @@ def main():
         validate_exception(item)
 
     exceptions = {
-        (item["rule_id"], item["file"]): item
+        (normalize_rule_id(item["rule_id"]), item["file"]): item
         for item in exceptions_list
     }
 
@@ -73,7 +85,7 @@ def main():
         severity = str(metadata.get("severity", "MEDIUM")).upper()
         rule_id = finding.get("check_id", "unknown")
         path = finding.get("path", "unknown")
-        key = (rule_id, path)
+        key = (normalize_rule_id(rule_id), path)
 
         if key in exceptions:
             suppressed.append((severity, rule_id, path))
