@@ -1,130 +1,132 @@
-# LAB — Métricas DevSecOps: de la herramienta al impacto
+# LAB — Métricas DevSecOps + SARIF
 
 **Repositorio:** Insurance Core API  
+**Rama:** `exercise/devsecops-metrics`  
 **Duración máxima:** 50 minutos  
-**Nivel:** Intermedio / avanzado  
 **Modalidad:** laboratorio guiado
 
----
-
-## 1. ¿Qué vamos a demostrar?
+## Objetivo
 
 Este laboratorio acompaña la presentación **“Métricas de Adopción y DevSecOps — Early Detection • Leakage • Security • Quality • Flow”**.
 
-La idea central de la presentación es que una herramienta instalada no demuestra que exista una capacidad DevSecOps. Hay que medir **adopción, enforcement, prevención, remediación y el impacto sobre el flow**. La presentación resume el modelo como: Adoption → Detection → Prevention → Remediation → Flow. 
+La solución ya está preparada. El alumno **no construye el pipeline de métricas**: ejecuta el laboratorio, revisa los resultados, interpreta los indicadores y observa cómo los resultados de seguridad pueden representarse en **SARIF 2.1.0**.
 
-En este laboratorio el pipeline ya está construido. **No vas a desarrollar una solución de métricas desde cero.** Vas a ejecutar una medición preparada, interpretar los resultados y tomar decisiones.
+> **Importante:** SARIF es el formato estructurado para resultados de herramientas de análisis. Las métricas de Adoption, Leakage, Security, Quality y Flow siguen mostrándose como reporte; los findings de seguridad se publican además como SARIF para que GitHub Code Scanning pueda visualizarlos.
 
 ---
 
-## 2. Resultado esperado
-
-Al finalizar debes poder responder:
-
-> **¿La seguridad está realmente integrada al delivery o solamente tenemos herramientas ejecutándose?**
-
-Y deberías poder demostrarlo con números.
-
-El laboratorio utiliza cinco dimensiones:
+## 1. Estructura del ejercicio
 
 ```text
-┌──────────────┐
-│   ADOPTION   │  ¿Está habilitado y es obligatorio?
-└──────┬───────┘
-       ↓
-┌──────────────┐
-│ EARLY        │  ¿Dónde detectamos el riesgo?
-│ DETECTION    │
-└──────┬───────┘
-       ↓
-┌──────────────┐
-│   LEAKAGE    │  ¿Qué evitamos que llegue al repo?
-└──────┬───────┘
-       ↓
-┌──────────────┐
-│  SECURITY    │  ¿Qué tan rápido remediamos?
-└──────┬───────┘
-       ↓
-┌──────────────┐
-│ QUALITY/FLOW │  ¿Qué impacto tiene en delivery?
-└──────────────┘
+metrics/
+├── devsecops-metrics.json       # dataset sintético
+├── devsecops_metrics.py         # cálculo de métricas
+└── devsecops-results.sarif      # resultados de seguridad en SARIF 2.1.0
+
+.github/workflows/
+└── devsecops-metrics.yml        # ejecución + publicación SARIF
+
+LAB.md                            # esta guía
 ```
+
+Los datos son sintéticos y reproducibles. No se requieren credenciales ni APIs externas.
 
 ---
 
-# 3. Antes de comenzar — 5 minutos
-
-Clona el repositorio y cambia a la rama del laboratorio:
+# 2. Ejecutar localmente — 5 min
 
 ```bash
 git clone https://github.com/aldo2510/insurance-core-api.git
 cd insurance-core-api
 git checkout exercise/devsecops-metrics
-```
-
-Revisa la estructura:
-
-```bash
-find metrics -maxdepth 2 -type f | sort
-```
-
-Encontrarás:
-
-```text
-metrics/
-├── devsecops-metrics.json
-└── devsecops_metrics.py
-```
-
-Y el workflow:
-
-```text
-.github/workflows/devsecops-metrics.yml
-```
-
-### Importante
-
-Los datos son **sintéticos y reproducibles**. No necesitamos credenciales de GitHub ni APIs externas para realizar el ejercicio.
-
----
-
-# 4. Ejecutar la medición — 5 minutos
-
-Ejecuta:
-
-```bash
 python metrics/devsecops_metrics.py
 ```
 
-También puedes ejecutarlo desde GitHub Actions mediante:
+El comando genera el reporte de métricas y deja disponible:
 
-**Actions → DevSecOps Metrics Lab → Run workflow**
+```text
+metrics/devsecops-results.sarif
+```
 
-El workflow genera el mismo reporte y lo publica como artifact.
+Comprueba que es JSON válido:
 
-### Primera pregunta
-
-Antes de mirar los números en detalle:
-
-> **¿Cuál crees que es la métrica más importante: coverage, enforcement, early detection, MTTR o flow?**
-
-No hay una respuesta única. La discusión es parte del ejercicio.
+```bash
+python -m json.tool metrics/devsecops-results.sarif > /dev/null && echo "SARIF válido"
+```
 
 ---
 
-# 5. Adoption — 7 minutos
+# 3. Entender SARIF — 5 min
 
-Busca en la salida:
+Abre:
 
 ```text
-ADOPTION
-  Coverage
-  PRs with scanning
-  Enforcement / gate
-  PRs corrected
+metrics/devsecops-results.sarif
 ```
 
-Los datos iniciales son:
+Identifica las tres partes principales:
+
+```text
+SARIF
+ └── runs
+      ├── tool.driver
+      │    ├── name
+      │    └── rules
+      │
+      └── results
+           ├── ruleId
+           ├── level
+           ├── message
+           └── locations
+```
+
+En este laboratorio aparecen findings sintéticos como:
+
+```text
+DEVSECOPS-CRITICAL-BACKLOG   error
+DEVSECOPS-HIGH-BACKLOG       error
+DEVSECOPS-HIGH-COMPLEXITY    warning
+```
+
+### Pregunta
+
+¿Por qué resulta útil un formato estándar como SARIF?
+
+Porque permite que diferentes herramientas de seguridad entreguen resultados estructurados de forma consistente y que plataformas como GitHub puedan consumirlos.
+
+---
+
+# 4. Ejecutar GitHub Actions — 5 min
+
+Ve a:
+
+**GitHub → Actions → DevSecOps Metrics Lab → Run workflow**
+
+El workflow realiza:
+
+```text
+Checkout
+   ↓
+Python
+   ↓
+Generación de métricas
+   ↓
+SARIF
+   ↓
+Upload SARIF
+   ↓
+GitHub Code Scanning
+```
+
+El workflow utiliza `github/codeql-action/upload-sarif@v3` para publicar `metrics/devsecops-results.sarif`.
+
+También conserva el reporte y el SARIF como artifacts.
+
+---
+
+# 5. Adoption — 6 min
+
+Observa el reporte:
 
 ```text
 Repositories             10
@@ -134,14 +136,7 @@ PRs with scanning          46
 PRs with gate              43
 ```
 
-Calcula mentalmente:
-
-```text
-Coverage = protected repositories / repositories
-Enforcement = PRs with gate / PRs
-```
-
-El script muestra aproximadamente:
+El laboratorio calcula aproximadamente:
 
 ```text
 Coverage      90.0%
@@ -149,23 +144,15 @@ Scanning      92.0%
 Enforcement   86.0%
 ```
 
-### Pregunta clave
+### Pregunta
 
-¿Por qué **90% de coverage no significa 90% de enforcement**?
+¿Por qué tener 90% de coverage no significa tener 90% de enforcement?
 
-La presentación insiste en esta diferencia: coverage indica dónde está habilitado el control; enforcement indica qué PR realmente está sujeto al control. fileciteturn48file14L317-L327
-
-### Reto rápido
-
-Imagina que mañana subimos coverage de 90% a 100%, pero enforcement permanece en 86%.
-
-**¿Dirías que el programa llegó a 100% de adopción?**
-
-> No. La herramienta puede estar activa sin que el control sea obligatorio.
+**Coverage** indica dónde está habilitado el control. **Enforcement** indica dónde realmente se aplica como condición del delivery.
 
 ---
 
-# 6. Early Detection — 7 minutos
+# 6. Early Detection — 6 min
 
 Observa:
 
@@ -173,46 +160,33 @@ Observa:
 Detected in PR       37
 Detected in CI        9
 Escaped               4
+EDR                  74%
 ```
 
-El laboratorio calcula:
-
-```text
-EDR = detecciones en PR /
-      (detecciones PR + CI + escaped)
-```
-
-Resultado aproximado:
-
-```text
-EDR = 74%
-```
-
-Este indicador responde:
-
-> **¿Qué proporción del riesgo se descubre antes de llegar a producción?**
-
-La presentación utiliza precisamente esta lectura y busca aumentar la proporción temprana y reducir escapes. fileciteturn48file9L219-L227
+El EDR representa la proporción del riesgo detectado temprano frente al total considerado en el ejercicio.
 
 ### Pregunta
 
-¿Qué preferirías?
+¿Qué es preferible?
 
 ```text
-A) 100 vulnerabilidades detectadas
-   todas en producción
-
-B) 100 vulnerabilidades detectadas
-   90 en PR y 10 en CI
+100 findings detectados en producción
 ```
 
-La respuesta correcta desde DevSecOps no es solamente “tener más detecciones”. Es **detectar antes**.
+o
+
+```text
+90 detectados en PR
+10 detectados en CI
+```
+
+La segunda situación representa una capacidad de prevención más temprana.
 
 ---
 
-# 7. Leakage — 7 minutos
+# 7. Leakage — 6 min
 
-Ahora analiza:
+Analiza:
 
 ```text
 Detected       20
@@ -222,47 +196,14 @@ Bypass          2
 Exposed         0
 ```
 
-La presentación propone mirar el secreto como un evento preventivo:
+Calcula:
 
 ```text
-Detectado
-   ↓
-Confirmado
-   ↓
-Bloqueado
-   ↓
-Bypass
-   ↓
-Expuesto
+Prevention Rate = 15 / 17 = 88.2%
+Bypass Rate     =  2 / 17 = 11.8%
 ```
 
-No basta con contar secretos encontrados; debemos medir cuánto evitamos que llegue al repositorio. fileciteturn48file10L238-L248
-
-### Calcula
-
-```text
-Prevention Rate = blocked / confirmed
-```
-
-Resultado:
-
-```text
-15 / 17 = 88.2%
-```
-
-Y:
-
-```text
-Bypass Rate = bypass / confirmed
-```
-
-Resultado:
-
-```text
-2 / 17 = 11.8%
-```
-
-### Ahora mira los motivos del bypass
+Los bypass tienen motivos:
 
 ```text
 false_positive    1
@@ -271,29 +212,17 @@ will_fix_later    0
 other             0
 ```
 
-Esto es importante: **no todos los bypass tienen el mismo significado**. La presentación recomienda separar las razones para distinguir ruido, pruebas, deuda pendiente y otros casos. fileciteturn48file1L33-L38
-
 ### Pregunta
 
-¿Te preocuparía más:
+¿Un bypass por false positive tiene el mismo significado que un bypass por `will_fix_later`?
 
-```text
-10 bypass por false positive
-```
-
-o
-
-```text
-10 bypass por will-fix-later
-```
-
-¿Por qué?
+No. El contexto del bypass cambia la interpretación del riesgo y debe conservarse como dato.
 
 ---
 
-# 8. Security — 6 minutos
+# 8. Security + SARIF — 6 min
 
-Observa:
+El reporte muestra:
 
 ```text
 Open alerts       18
@@ -303,157 +232,106 @@ MTTR              4.2 days
 SLA               90.5%
 ```
 
-La presentación plantea medir:
+Ahora abre el resultado SARIF en GitHub Code Scanning.
 
-- backlog;
-- edad de las alertas;
-- MTTR;
-- SLA;
-- resolución.
+Deberías encontrar los findings sintéticos:
 
-Aquí queremos responder:
+| Rule | Level | Significado |
+|---|---|---|
+| `DEVSECOPS-CRITICAL-BACKLOG` | error | Critical abierto |
+| `DEVSECOPS-HIGH-BACKLOG` | error | High abiertos |
+| `DEVSECOPS-HIGH-COMPLEXITY` | warning | Riesgo de calidad |
 
-> **¿Estamos detectando problemas más rápido de lo que los estamos resolviendo?**
+### Pregunta clave
 
-### Pregunta crítica
+¿Por qué es interesante combinar el reporte de métricas con SARIF?
 
-Supón que mañana:
-
-```text
-Open alerts: 18 → 8
-```
-
-pero:
+Porque puedes tener dos niveles:
 
 ```text
-Critical: 1 → 3
-MTTR: 4.2 → 9 días
+SARIF
+  ↓
+Finding individual
+
+Métricas
+  ↓
+Tendencia / programa / impacto
 ```
 
-¿Es una mejora?
-
-**No necesariamente.**
-
-El número total de alertas por sí solo puede esconder un deterioro de riesgo.
+El finding responde **“¿qué ocurrió?”**. La métrica ayuda a responder **“¿qué tan grande es el problema y está mejorando?”**.
 
 ---
 
-# 9. Quality + Flow — 7 minutos
+# 9. Quality + Flow — 5 min
 
-Finalmente observa:
-
-```text
-QUALITY
-  New-code coverage    84%
-  Bugs                 14
-  Code smells         126
-  Duplication          3.2%
-
-FLOW
-  PR cycle             74 min
-  Review               38 min
-  Pipeline             21 min
-  Security              6 min
-  Lead time             19 h
-  Deployment frequency  11/week
-  Change failure rate   7%
-```
-
-La presentación plantea que Security, Quality y Flow deben contar una sola historia. Optimizar un vértice destruyendo otro **no es DevSecOps**. fileciteturn48file15L338-L345
-
-### Métrica interesante
-
-El script calcula:
+Observa:
 
 ```text
-Security share = security time / pipeline time
+New-code coverage    84%
+Bugs                 14
+Code smells         126
+Duplication          3.2%
+
+PR cycle             74 min
+Review               38 min
+Pipeline             21 min
+Security              6 min
+Lead time             19 h
+Deployment frequency  11/week
+Change failure rate   7%
 ```
 
-Resultado:
+Calcula:
 
 ```text
-6 / 21 = 28.6%
+Security Share = 6 / 21 = 28.6%
 ```
 
-Esto cambia la pregunta.
-
-No preguntamos:
+La pregunta no es solamente:
 
 > “¿Security tarda 6 minutos?”
 
-Preguntamos:
+sino:
 
 > **“¿Qué porcentaje del feedback total consume Security?”**
 
-La presentación utiliza exactamente este enfoque para analizar Pipeline Duration. fileciteturn48file19L415-L422
-
 ---
 
-# 10. El reto final — 5 minutos
+# 10. Reto ejecutivo — 5 min
 
-Supón que eres responsable de DevSecOps y debes presentar el estado a un gerente.
+Construye un scorecard con cinco indicadores:
 
-No puedes mostrar 30 métricas.
-
-Construye mentalmente un scorecard con cinco indicadores:
-
-| Dimensión | Métrica elegida | Resultado |
+| Dimensión | Indicador | Resultado |
 |---|---|---:|
 | Adoption | Enforcement | 86% |
 | Prevention | EDR | 74% |
 | Leakage | Prevention Rate | 88.2% |
 | Security | MTTR | 4.2 días |
-| Flow | Security share | 28.6% |
+| Flow | Security Share | 28.6% |
 
-La presentación propone precisamente un **Balanced Scorecard** que combine Security, Quality y Flow. fileciteturn48file3L70-L86
-
-### Tu misión
-
-Explica en **60 segundos**:
+En **60 segundos**, responde:
 
 > ¿Qué está funcionando, cuál es el mayor riesgo y qué deberíamos mejorar primero?
 
-Una buena respuesta debería mencionar algo parecido a:
+Una respuesta sólida debería identificar que:
 
-```text
-ADOPTION
-Tenemos buen coverage, pero enforcement todavía
-no cubre todos los PR.
-
-PREVENTION
-La mayoría del riesgo se detecta temprano,
-pero todavía existen escapes.
-
-LEAKAGE
-Push Protection evita la mayor parte de los secretos,
-pero debemos revisar los bypass.
-
-SECURITY
-El MTTR está por debajo del SLA objetivo,
-pero existe riesgo crítico abierto.
-
-FLOW
-Security representa casi 29% del pipeline,
-por lo que debemos vigilar el costo del feedback.
-```
+- la adopción es buena, pero todavía existe gap de enforcement;
+- la mayoría del riesgo se detecta temprano, aunque existen escapes;
+- push protection bloquea la mayoría de secretos confirmados;
+- existe backlog crítico/high que requiere atención;
+- Security consume una parte relevante del pipeline y debe vigilarse su impacto en Flow.
 
 ---
 
 # 11. Bonus — 1 cambio de datos
 
-Si todavía tienes tiempo, modifica únicamente:
-
-```text
-metrics/devsecops-metrics.json
-```
-
-Cambia:
+Si queda tiempo, modifica en `metrics/devsecops-metrics.json`:
 
 ```json
 "security_minutes": 6
 ```
 
-a:
+por:
 
 ```json
 "security_minutes": 12
@@ -465,73 +343,57 @@ Ejecuta nuevamente:
 python metrics/devsecops_metrics.py
 ```
 
-Observa cómo cambia:
-
-```text
-Security share
-```
+Observa cómo cambia **Security Share**.
 
 ### Discusión
 
-¿La seguridad empeoró?
-
-No necesariamente.
-
-Puede significar que:
-
-- aumentó la profundidad del análisis;
-- aumentó el tiempo de feedback;
-- el pipeline está procesando más controles;
-- existe una oportunidad de optimización.
-
-Por eso **una métrica aislada no debe convertirse en un objetivo de vanidad**. La presentación recomienda mirar tendencia + severidad + contexto. fileciteturn47file5L103-L108
+Un indicador aislado no determina automáticamente si el programa mejoró o empeoró. Hay que interpretarlo junto con seguridad, calidad, tendencia y flow.
 
 ---
 
 # 12. Cierre
 
-La pregunta final del laboratorio es:
-
-> **¿Estamos optimizando una herramienta o estamos optimizando el sistema de delivery?**
-
-La respuesta que busca este laboratorio es la segunda.
-
-La presentación resume el objetivo de DevSecOps de esta manera:
+La idea central del laboratorio es:
 
 ```text
-Security
-   ↓
-Prevenir y reducir riesgo
-
-Quality
-   ↓
-Reducir defectos y deuda
-
-Flow
-   ↓
-Entregar rápido y estable
+Finding individual
+       ↓
+      SARIF
+       ↓
+Observabilidad de seguridad
+       ↓
+     Métricas
+       ↓
+Decisiones DevSecOps
 ```
 
-La métrica final no es “cuántas alertas tenemos”.
+No buscamos solamente tener herramientas ejecutándose.
 
-Es:
+Buscamos demostrar:
 
-> **cuánto riesgo reducimos sin romper el flujo de ingeniería.** fileciteturn48file0L11-L22
+```text
+ADOPTION
+   ↓
+DETECTION
+   ↓
+PREVENTION
+   ↓
+REMEDIATION
+   ↓
+FLOW
+```
 
----
+## Checklist
 
-## Checklist del laboratorio
-
-- [ ] Ejecuté el reporte de métricas.
-- [ ] Diferencié Coverage de Enforcement.
+- [ ] Ejecuté el reporte.
+- [ ] Entendí Coverage vs Enforcement.
 - [ ] Calculé EDR.
-- [ ] Analicé el Leakage Funnel.
-- [ ] Separé razones de bypass.
-- [ ] Revisé MTTR y SLA.
-- [ ] Relacioné Quality con Flow.
-- [ ] Calculé el costo relativo de Security dentro del pipeline.
+- [ ] Analicé Leakage.
+- [ ] Entendí el significado de los bypass.
+- [ ] Abrí el SARIF en Code Scanning.
+- [ ] Relacioné findings individuales con métricas agregadas.
+- [ ] Calculé Security Share.
 - [ ] Construí un scorecard ejecutivo.
-- [ ] Expliqué una decisión basada en tendencia + contexto.
 
-**Tiempo objetivo:** 45 minutos.  
-**Tiempo máximo:** 50 minutos.
+**Tiempo objetivo:** 45 minutos  
+**Tiempo máximo:** 50 minutos
