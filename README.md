@@ -49,7 +49,7 @@ Supported demo products:
 
 ```text
 REGISTERED -> UNDER_REVIEW -> APPROVED -> PAID
-                         \-> REJECTED
+                         \\-> REJECTED
 ```
 
 ### External integration
@@ -76,8 +76,8 @@ REGISTERED -> UNDER_REVIEW -> APPROVED -> PAID
 ### 1. Create customer
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/customers \
-  -H 'Content-Type: application/json' \
+curl -X POST http://localhost:8080/api/v1/customers \\
+  -H 'Content-Type: application/json' \\
   -d '{
     "documentNumber": "70123456",
     "fullName": "Maria Lopez",
@@ -88,8 +88,8 @@ curl -X POST http://localhost:8080/api/v1/customers \
 ### 2. Issue policy
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/policies \
-  -H 'Content-Type: application/json' \
+curl -X POST http://localhost:8080/api/v1/policies \\
+  -H 'Content-Type: application/json' \\
   -d '{
     "customerId": "CUSTOMER_UUID",
     "productCode": "AUTO_STANDARD",
@@ -103,8 +103,8 @@ curl -X POST http://localhost:8080/api/v1/policies \
 ### 3. Register claim
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/claims \
-  -H 'Content-Type: application/json' \
+curl -X POST http://localhost:8080/api/v1/claims \\
+  -H 'Content-Type: application/json' \\
   -d '{
     "policyId": "POLICY_UUID",
     "incidentType": "COLLISION",
@@ -145,6 +145,16 @@ GitHub Actions executes:
 8. Artifact upload
 
 The workflow is triggered by pushes and pull requests targeting `main`.
+
+## DevSecOps lab
+
+This branch includes a **pre-built 50-minute laboratory** focused on false-positive management and severity-based Quality Gates.
+
+Start here:
+
+➡️ **[LAB.md](./LAB.md)**
+
+The exercise is already automated with Semgrep, a severity policy, a controlled false-positive exception and a GitHub Actions Quality Gate. The learner does not build the pipeline from scratch; the lab focuses on observing, analyzing, documenting the false positive and remediating the real CRITICAL finding.
 
 ## Next enterprise evolution
 
