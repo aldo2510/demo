@@ -1,0 +1,57 @@
+{
+  "program": {
+    "repositories": 10,
+    "protected_repositories": 9,
+    "prs": 50,
+    "prs_with_scanning": 46,
+    "prs_with_gate": 43,
+    "prs_corrected": 40,
+    "bypasses": 2
+  },
+  "early_detection": {
+    "detected_in_pr": 37,
+    "detected_in_ci": 9,
+    "escaped_to_production": 4
+  },
+  "leakage": {
+    "detected_secrets": 20,
+    "confirmed_secrets": 17,
+    "blocked_by_push_protection": 15,
+    "bypassed": 2,
+    "exposed": 0
+  },
+  "security": {
+    "open_alerts": 18,
+    "critical_open": 1,
+    "high_open": 4,
+    "medium_open": 8,
+    "low_open": 5,
+    "average_age_days": 11,
+    "mttr_days": 4.2,
+    "sla_target_days": 7,
+    "resolved_within_sla": 38,
+    "resolved_total": 42
+  },
+  "quality": {
+    "coverage_new_code_pct": 84,
+    "bugs": 14,
+    "code_smells": 126,
+    "duplication_pct": 3.2,
+    "high_complexity_items": 21
+  },
+  "flow": {
+    "pr_cycle_minutes": 74,
+    "review_minutes": 38,
+    "pipeline_minutes": 21,
+    "security_minutes": 6,
+    "lead_time_hours": 19,
+    "deployment_frequency_per_week": 11,
+    "change_failure_rate_pct": 7
+  },
+  "bypass_reasons": {
+    "false_positive": 1,
+    "used_in_tests": 1,
+    "will_fix_later": 0,
+    "other": 0
+  }
+}
