@@ -8,8 +8,11 @@ public final class SecurityLabExamples {
     }
 
     // Intentional CRITICAL finding for the exercise.
-    public static void executeUserCommand(String command) throws Exception {
+    /*public static void executeUserCommand(String command) throws Exception {
         Runtime.getRuntime().exec(command);
+    } */
+    public static String executeUserCommand(String command) {
+    return "Command execution is disabled by security policy";
     }
 
     // Intentional HIGH finding that the instructor will classify as a false positive:
