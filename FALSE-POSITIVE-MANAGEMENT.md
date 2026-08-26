@@ -1,131 +1,111 @@
 # Laboratorio DevSecOps — Gestión de Falsos Positivos, Criticidad y Quality Gate
 
-> **Objetivo del laboratorio:** convertir un pipeline de seguridad ruidoso en un gate accionable, usando clasificación por criticidad, configuración centralizada, excepciones auditables y separación entre findings que bloquean y findings que deben quedar para revisión.
-
 ## Duración
 
-**Tiempo recomendado: 120–150 minutos.**
+**Tiempo recomendado: 150–180 minutos.**
 
-- 10 min — Preparación y lectura del escenario
-- 15 min — Levantamiento del baseline
-- 25 min — Triage y clasificación de findings
-- 20 min — Diseño de política por criticidad
-- 25 min — Implementación de configuración y Quality Gate
-- 15 min — Gestión documentada de falsos positivos
-- 10 min — Validación con PR y re-run
-- 10–30 min — Desafío opcional / discusión empresarial
+El laboratorio está diseñado para una sesión larga y puede extenderse hasta **3 horas** si se ejecutan los desafíos opcionales, se exige evidencia de cada decisión y se comparan las tres políticas de Quality Gate.
 
-La versión completa está pensada para ocupar prácticamente una sesión larga de laboratorio, especialmente si se pide al alumno justificar cada decisión antes de modificar el repositorio.
+## Objetivo
 
----
+Convertir un pipeline de seguridad ruidoso en un gate accionable usando:
 
-## 1. Contexto
+- clasificación por criticidad;
+- configuración centralizada;
+- triage técnico;
+- gestión documentada de falsos positivos;
+- excepciones de mínimo alcance;
+- audit trail;
+- métricas;
+- separación entre findings bloqueantes y no bloqueantes.
 
-El repositorio es una **Insurance Core API** construida con Java 25, Spring Boot 4.1 y Maven. La aplicación expone operaciones de clientes, pólizas, siniestros y una integración externa de riesgo. El repositorio ya tiene un workflow de GitHub Actions que ejecuta compilación, pruebas, Checkstyle, JaCoCo y empaquetado; además existe un workflow de Dependency Review. El laboratorio parte de ese pipeline y lo evoluciona hacia una política de seguridad orientada al riesgo.
-
-La presentación del curso plantea cuatro ideas que usaremos directamente:
-
-- reducir el **ruido** para evitar alert fatigue;
-- investigar el contexto antes de marcar un finding como false positive;
-- preferir excepciones de **mínimo alcance**;
-- permitir que el Quality Gate sea estricto donde el riesgo realmente importa.
-
-En la presentación, el false positive se define como una alerta que no representa realmente una vulnerabilidad en el contexto actual; también se diferencia de un false negative, donde el riesgo existe pero la herramienta no lo detecta. Asimismo, se propone el uso de severidad + confidence para decidir qué bloquea y qué se deriva a revisión asíncrona.
+La presentación plantea precisamente reducir alert fatigue, distinguir TP/FP/FN/TN, hacer tuning de reglas, usar análisis contextual y gestionar excepciones con trazabilidad. fileciteturn1file0L24-L31 fileciteturn1file0L45-L55
 
 ---
 
-## 2. Reto del laboratorio
+# 1. Escenario
 
-El equipo de desarrollo se queja de que cualquier finding termina bloqueando el Pull Request.
+La aplicación es una **Insurance Core API** con Java 25, Spring Boot 4.1 y Maven. El repositorio ya tiene GitHub Actions para build, tests, Checkstyle, JaCoCo y empaquetado, además de Dependency Review. fileciteturn5file0L2-L6 fileciteturn4file0L2-L5
 
-La nueva política solicitada por el equipo de AppSec es:
+El equipo de desarrollo se queja de que cualquier alerta termina bloqueando el Pull Request.
 
-| Criticidad | Comportamiento esperado |
+La nueva política de AppSec será:
+
+| Criticidad | Comportamiento |
 |---|---|
-| **CRITICAL** | Bloquea el PR |
-| **HIGH** | Bloquea el PR |
-| **MEDIUM** | No bloquea; queda visible para tratamiento |
-| **LOW** | No bloquea; queda visible para seguimiento |
+| **CRITICAL** | Bloquea |
+| **HIGH** | Bloquea |
+| **MEDIUM** | Visible, no bloquea |
+| **LOW** | Visible, no bloquea |
 | **FALSE POSITIVE** | No bloquea, pero exige evidencia y trazabilidad |
-| **RISK ACCEPTED** | No se trata como false positive; requiere proceso de riesgo |
+| **RISK ACCEPTED** | No es FP; sigue proceso de riesgo |
 
-### Regla de oro
-
-> **No queremos que el pipeline pase porque dejamos de analizar. Queremos que pase porque hemos decidido qué debe bloquear y qué debe gestionarse fuera del camino crítico.**
+> **Regla de oro:** no queremos que el pipeline pase porque dejamos de analizar; queremos que pase porque hemos decidido qué debe bloquear.
 
 ---
 
-## 3. Antes de tocar el código: baseline
-
-### 3.1. Clonar el repositorio
+# 2. Baseline — 15 minutos
 
 ```bash
 git clone https://github.com/aldo2510/insurance-core-api.git
 cd insurance-core-api
-```
-
-### 3.2. Cambiar a la rama del laboratorio
-
-```bash
 git checkout exercise/false-positive-management
-```
-
-### 3.3. Ejecutar el estado inicial
-
-```bash
 mvn -B -ntp clean verify
 ```
 
 Documenta:
 
-- duración del build;
-- resultado de pruebas;
-- resultado de Checkstyle;
-- cobertura JaCoCo;
-- artifacts generados;
-- estado del workflow en GitHub Actions.
+- duración;
+- tests;
+- Checkstyle;
+- JaCoCo;
+- artifacts;
+- estado del workflow.
 
-### Pregunta de análisis
+**Pregunta:** ¿qué parte del pipeline actual es un Quality Gate real y qué parte solamente ejecuta una herramienta?
 
-> ¿Qué parte del pipeline actual es un verdadero Quality Gate y qué parte solamente ejecuta una herramienta?
-
-**No modifiques nada todavía.**
+No modifiques nada todavía.
 
 ---
 
-## 4. Levantamiento de la política
+# 3. Matriz de decisión — 20 minutos
 
-Antes de configurar una herramienta, crea una matriz de decisión.
+Construye una matriz con:
 
-### Matriz inicial
+| Severity | Block | Human Review | Can be FP | Owner | SLA |
+|---|---:|---:|---:|---|---|
+| CRITICAL | Sí | Sí | Sí* | | |
+| HIGH | Sí | Sí | Sí* | | |
+| MEDIUM | No | Sí | Sí | | |
+| LOW | No | Opcional | Sí | | |
 
-| Severidad | ¿Bloquea? | ¿Requiere revisión humana? | ¿Puede ser FP? |
-|---|---:|---:|---:|
-| CRITICAL | Sí | Sí | Sí, con evidencia fuerte |
-| HIGH | Sí | Sí | Sí, con evidencia fuerte |
-| MEDIUM | No | Sí | Sí |
-| LOW | No | Opcional | Sí |
+`*` solo con evidencia fuerte.
 
-Completa la matriz incluyendo:
-
-- owner;
-- SLA de tratamiento;
-- fecha de revisión;
-- tratamiento de legacy;
-- comportamiento en Pull Request;
-- comportamiento en branch principal.
-
-### Debate
-
-¿Por qué conviene bloquear solamente HIGH/CRITICAL en vez de hacer `continue-on-error: true` sobre todo el análisis?
-
-La presentación advierte explícitamente que hacer que el pipeline ignore globalmente el resultado destruye el objetivo del Quality Gate.
+Discute por qué `continue-on-error: true` no es una solución: la presentación señala que apagar el gate completo destruye el objetivo del Quality Gate. fileciteturn1file0L98-L103
 
 ---
 
-## 5. Identificar el tipo de finding
+# 4. Triage técnico — 25 minutos
 
-Clasifica cada hallazgo encontrado en una de estas categorías:
+Para cada finding registra:
+
+```text
+Rule ID:
+Severidad:
+Archivo:
+Línea:
+Fuente:
+Sink:
+Ruta del dato:
+Validaciones:
+Controles compensatorios:
+Contexto funcional:
+Decisión:
+Owner:
+Review date:
+```
+
+Clasifica:
 
 ```text
 A. True Positive
@@ -135,67 +115,22 @@ D. False Negative sospechado
 E. Evidencia insuficiente
 ```
 
-### Criterios
+Preguntas obligatorias:
 
-**True Positive**
-- el riesgo existe;
-- el flujo es explotable o el comportamiento inseguro es válido en el contexto;
-- requiere remediación.
-
-**False Positive**
-- la herramienta detecta un patrón;
-- el análisis del contexto demuestra que la condición de riesgo no se cumple;
-- la excepción debe quedar documentada.
-
-**Risk Accepted**
-- el finding es válido;
-- la organización decide no remediarlo inmediatamente;
-- debe seguir un proceso de aceptación de riesgo.
-
-**Evidencia insuficiente**
-- todavía no puedes demostrar que el riesgo no aplica;
-- el finding permanece abierto.
-
----
-
-## 6. Triage técnico
-
-Para cada finding, documenta como mínimo:
-
-```text
-Rule ID:
-Severidad:
-Archivo:
-Línea:
-Fuente del dato:
-Sink:
-Ruta del dato:
-Controles existentes:
-Contexto funcional:
-Resultado del análisis:
-Owner:
-Fecha de revisión:
-```
-
-### Preguntas obligatorias
-
-1. ¿Qué regla generó el finding?
-2. ¿Qué patrón está buscando?
+1. ¿Qué regla lo generó?
+2. ¿Qué patrón busca?
 3. ¿Existe una fuente controlada por el usuario?
-4. ¿Existe realmente el sink peligroso?
-5. ¿Existe sanitización, validación o encoding?
-6. ¿Hay una capa adicional de protección?
-7. ¿La herramienta entiende correctamente el framework?
-8. ¿El hallazgo puede reproducirse?
-9. ¿Qué cambia si modificamos una sola condición del código?
+4. ¿Existe realmente el sink?
+5. ¿Hay sanitización, validación o encoding?
+6. ¿Existe otra capa de protección?
+7. ¿Puede reproducirse?
+8. ¿Qué evidencia demostraría que no aplica?
 
 ---
 
-# 7. Ejercicio principal: configurar un Quality Gate orientado a criticidad
+# 5. Ejercicio principal: Quality Gate por criticidad — 30 minutos
 
-## Objetivo
-
-Construir un gate con esta lógica:
+Construye:
 
 ```text
                     Finding
@@ -210,36 +145,9 @@ Construir un gate con esta lógica:
        Quality Gate FAIL     Quality Gate PASS
 ```
 
-### Requisito adicional
+**Importante:** MEDIUM/LOW continúan siendo analizados. Solo dejan de bloquear el camino crítico.
 
-El gate **no debe** desactivar el análisis para MEDIUM/LOW.
-
-Los findings siguen generándose; simplemente no bloquean el flujo crítico.
-
----
-
-## 8. Configuración del repositorio
-
-Inspecciona primero la estructura actual:
-
-```bash
-find .github -maxdepth 3 -type f | sort
-```
-
-Revisa especialmente:
-
-```text
-.github/workflows/build.yml
-.github/workflows/dependency-review.yml
-pom.xml
-checkstyle.xml
-```
-
-El objetivo es identificar qué puede convertirse en configuración centralizada y qué debe mantenerse en el código.
-
-### Tarea
-
-Diseña una configuración equivalente a:
+Diseña una configuración versionada como:
 
 ```text
 .github/
@@ -251,7 +159,7 @@ Diseña una configuración equivalente a:
     └── policy.yml
 ```
 
-La política puede contener, como mínimo:
+Ejemplo pedagógico:
 
 ```yaml
 severity:
@@ -268,89 +176,74 @@ false_positive:
   require_review_date: true
 ```
 
-> **Nota:** el formato anterior es parte del ejercicio pedagógico. No se exige que una herramienta concreta consuma exactamente este YAML; el participante debe adaptar la política al mecanismo de análisis elegido.
+> Este YAML es una política del ejercicio; el alumno debe adaptarla al mecanismo de seguridad utilizado.
 
----
-
-# 9. Diseñar el pipeline
-
-El flujo esperado es:
+El pipeline esperado:
 
 ```text
-Push / Pull Request
-        |
-        v
- Build + Tests
-        |
-        v
- Security Scan
-        |
-        v
- Normalize Findings
-        |
-        v
- Apply Severity Policy
-        |
-   +----+----+
-   |         |
- HIGH/CRIT  MED/LOW
-   |         |
- BLOCK    REPORT ONLY
-   |         |
-   +----+----+
-        |
-        v
-  Quality Gate
+PR
+ |
+v
+Build + Tests
+ |
+v
+Security Scan
+ |
+v
+Normalize Findings
+ |
+v
+Apply Severity Policy
+ |
+ +---- HIGH/CRITICAL ---> BLOCK
+ |
+ +---- MEDIUM/LOW ------> REPORT ONLY
+ |
+v
+Quality Gate
 ```
-
-### Reglas
-
-- Nunca uses `continue-on-error: true` para apagar globalmente el gate.
-- El análisis sigue ejecutándose.
-- Solo la decisión de bloqueo depende de criticidad.
-- La política debe ser visible y revisable en Git.
 
 ---
 
-# 10. Falsos positivos: el caso que rompe el pipeline
+# 6. Caso de falso positivo — 20 minutos
 
-Crea un escenario donde la herramienta marque un finding que después pueda demostrarse como falso positivo.
+Crea un caso en el dominio Insurance Core API que pueda ser reportado por una herramienta y luego demostrado como FP. Puedes utilizar:
 
-El caso debe utilizar el dominio de **Insurance Core API**, por ejemplo:
+- validación de Customer;
+- Policy;
+- Claim;
+- integración Risk.
 
-- validación de entradas de customer;
-- filtros de policy;
-- estado de claim;
-- referencia externa de risk.
+**No escribas la excepción primero.** Primero demuestra técnicamente que el riesgo no aplica.
 
-### El ejercicio no consiste en escribir una excepción inmediatamente.
-
-Primero debes construir la evidencia.
-
-### Evidencia mínima
+La evidencia mínima es:
 
 ```text
 1. Finding original
-2. Regla
-3. Severidad
-4. Código involucrado
-5. Flujo del dato
-6. Control compensatorio
-7. Demostración de que la condición requerida por la regla no se cumple
-8. Justificación de FP
+2. Rule ID
+3. Severity
+4. Código
+5. Fuente del dato
+6. Sink
+7. Flujo
+8. Control compensatorio
+9. Evidencia de por qué la condición de riesgo no se cumple
+10. Justificación de FP
 ```
+
+La presentación propone precisamente auditar el flujo de datos antes de resolver un bloqueo injusto. fileciteturn1file0L95-L103
 
 ---
 
-# 11. Gestión del false positive
+# 7. Gestión de la excepción — 15 minutos
 
-Cuando exista evidencia suficiente, registra:
+Registra:
 
 ```text
 Estado: FALSE POSITIVE
 Rule ID: <id>
 Severidad: <severity>
-Owner: <equipo/persona>
+Owner: <equipo>
 Fecha: <fecha>
 Review date: <fecha>
 
@@ -361,14 +254,9 @@ Evidencia:
 - <evidencia 1>
 - <evidencia 2>
 - <evidencia 3>
-
-Impacto del cambio:
-<qué riesgo residual queda>
 ```
 
-### Regla de mínimo alcance
-
-Preferencia:
+Aplica **least privilege para excepciones**:
 
 ```text
 finding específico
@@ -383,55 +271,47 @@ No aceptamos:
 ```text
 Desactivar CodeQL
 Desactivar SAST
-Ignorar carpeta completa
+Ignorar una carpeta completa
 Ignorar todos los findings
 ```
 
+La presentación exige trazabilidad, justificación, ownership y revisión periódica de excepciones. fileciteturn1file0L111-L113 fileciteturn1file0L124-L127
+
 ---
 
-# 12. Confidence Score
+# 8. Confidence Score — 15 minutos
 
-La presentación propone combinar severidad y confianza. Una política didáctica puede ser:
+La presentación plantea combinar severidad y confianza. Prueba:
 
 ```text
 BLOCK =
-  (severity IN [HIGH, CRITICAL])
-  AND
-  (confidence >= 90)
+  severity IN [HIGH, CRITICAL]
+  AND confidence >= 90
 ```
 
-Mientras que:
+Analiza especialmente:
 
 ```text
-NO BLOCK =
-  (severity IN [LOW, MEDIUM])
-  OR
-  (confidence < 90)
+CRITICAL + confidence 70%
 ```
 
-### Pregunta clave
-
-¿Qué ocurre con un **CRITICAL con confidence 70%**?
-
-El alumno debe justificar si la organización prefiere:
+Decide si debe:
 
 - bloquear por severidad;
-- derivar a triage humano;
-- usar una combinación severidad + confidence.
+- pasar a triage humano;
+- usar política híbrida.
 
-**No existe una respuesta universal. Lo importante es justificar la política.**
+La presentación usa como ejemplo un gate que bloquea cuando la severidad es alta y la confianza supera 90%, mientras que los casos de menor confianza pasan a revisión humana. fileciteturn1file0L78-L82
 
 ---
 
-# 13. Escenario avanzado: dos PRs
-
-Para maximizar el ejercicio, trabaja con dos ramas o dos Pull Requests conceptuales.
+# 9. Dos Pull Requests — 15 minutos
 
 ## PR #1 — Ruido
 
-Introduce findings LOW/MEDIUM y un supuesto false positive.
+Introduce LOW/MEDIUM + supuesto FP.
 
-Resultado esperado:
+Esperado:
 
 ```text
 Scan: PASS
@@ -442,9 +322,9 @@ Findings: visibles
 
 ## PR #2 — Riesgo real
 
-Introduce un finding HIGH o CRITICAL controlado para que el pipeline tenga que bloquear.
+Introduce HIGH/CRITICAL controlado.
 
-Resultado esperado:
+Esperado:
 
 ```text
 Scan: FINDING
@@ -452,19 +332,15 @@ Gate: FAIL
 PR: BLOCKED
 ```
 
-### Objetivo pedagógico
-
-Demostrar que:
-
-> **Reducir falsos positivos no significa reducir sensibilidad frente a los riesgos críticos.**
+Objetivo: demostrar que reducir falsos positivos **no** significa reducir sensibilidad ante riesgos críticos.
 
 ---
 
-# 14. Experimento de tuning
+# 10. Experimento de tuning — 20 minutos
 
-Realiza tres ejecuciones modificando únicamente la política.
+Ejecuta tres políticas y compara resultados.
 
-### Experimento A — Todo bloquea
+### A — Todo bloquea
 
 ```text
 LOW      -> BLOCK
@@ -473,9 +349,7 @@ HIGH     -> BLOCK
 CRITICAL -> BLOCK
 ```
 
-Registra el impacto en feedback y ruido.
-
-### Experimento B — Solo HIGH/CRITICAL
+### B — Solo HIGH/CRITICAL
 
 ```text
 LOW      -> PASS
@@ -484,9 +358,7 @@ HIGH     -> BLOCK
 CRITICAL -> BLOCK
 ```
 
-Registra qué findings siguen visibles.
-
-### Experimento C — Severidad + confianza
+### C — Severidad + confianza
 
 ```text
 HIGH/CRITICAL + confidence >= 90 -> BLOCK
@@ -494,72 +366,57 @@ HIGH/CRITICAL + confidence < 90  -> TRIAGE
 LOW/MEDIUM                       -> PASS
 ```
 
-Compara los tres modelos.
+Mide ruido, feedback y capacidad de detectar riesgos.
 
 ---
 
-# 15. Configuración de ramas y Pull Requests
+# 11. Branch Protection y Pull Request — 10 minutos
 
-Como parte del ejercicio, revisa la configuración del repositorio y decide qué controles deberían existir en `main`.
-
-Propuesta:
+Decide qué debe proteger `main`:
 
 ```text
 main
  ├── Pull Request obligatorio
- ├── Require status checks
+ ├── Required status checks
  ├── Security Quality Gate requerido
  ├── Review requerido
  └── No merge si HIGH/CRITICAL bloquea
 ```
 
-### Preguntas
+Discute:
 
-- ¿Qué status check debe ser obligatorio?
-- ¿Qué ocurre si el escaneo no está disponible?
-- ¿Qué ocurre si el pipeline falla por infraestructura y no por seguridad?
+- ¿Qué pasa si el escáner está caído?
+- ¿Qué pasa si falla infraestructura?
 - ¿Quién puede modificar la política?
-- ¿Quién puede aprobar excepciones?
+- ¿Quién aprueba excepciones?
 
 ---
 
-# 16. Audit Trail
+# 12. Audit Trail y métricas — 15 minutos
 
-Toda excepción debe dejar trazabilidad.
-
-Crea una tabla o registro con:
+Registra:
 
 | Finding | Severity | Decision | Owner | Date | Review Date |
 |---|---|---|---|---|---|
 | ... | ... | FALSE POSITIVE | ... | ... | ... |
 
-### Métrica final
-
 Calcula:
 
 ```text
-False Positive Rate =
-False Positives / Total Findings * 100
+False Positive Rate = False Positives / Total Findings * 100
+% findings bloqueantes
+% findings no bloqueantes
+% excepciones con owner
+% excepciones vencidas
 ```
 
-Y además:
-
-```text
-% de findings que bloquean
-% de findings no bloqueantes
-% de excepciones con owner
-% de excepciones vencidas
-```
+La presentación destaca que la gestión de falsos positivos es continua y que AppSec debe revisar periódicamente las excepciones. fileciteturn1file0L116-L127
 
 ---
 
-# 17. Desafío adicional — SCA
+# 13. Desafío SCA: Reachability — 15 minutos opcionales
 
-La presentación dedica una sección específica a falsos positivos en SCA y **Reachability Analysis**.
-
-Plantea este escenario:
-
-> Una dependencia tiene una vulnerabilidad conocida, pero el código de la aplicación no alcanza la función vulnerable.
+Plantea una dependencia vulnerable donde la aplicación no alcance la función vulnerable.
 
 Investiga:
 
@@ -567,54 +424,43 @@ Investiga:
 ¿La dependencia está realmente en ejecución?
 ¿Qué módulo importa la librería?
 ¿Qué función vulnerable se supone que es alcanzable?
-¿Hay un camino de ejecución desde la aplicación?
+¿Existe un camino de ejecución?
 ```
 
-### Resultado esperado
-
-No descartes una vulnerabilidad únicamente porque “no la usamos”.
-
-Demuestra técnicamente la **reachability** o la ausencia de ella.
+No descartes una vulnerabilidad solo porque “no la usamos”: demuestra reachability o su ausencia. La presentación usa Reachability Analysis como técnica para reducir falsos positivos en SCA. fileciteturn1file0L37-L41
 
 ---
 
-# 18. Desafío adicional — Secret Scanning
+# 14. Desafío Secret Scanning — 10 minutos opcionales
 
-Crea un dato sintético de alta entropía que parezca un secreto, pero que no sea un token real.
-
-Ejemplo:
+Usa únicamente un valor sintético:
 
 ```text
 INTERNAL_REFERENCE=7f8f5e8a1c0d4f91b6b9e3a5c7d2e1f0
 ```
 
-Investiga:
+Investiga por qué podría detectarse y cómo diferenciar un ID de un secreto real.
 
-- por qué podría ser detectado;
-- qué patrón utiliza el detector;
-- cómo diferenciar un ID de un secreto real;
-- qué controles adicionales evitarían falsos positivos.
+**Nunca uses credenciales reales.**
 
-**Nunca uses credenciales reales para este laboratorio.**
+La presentación explica que los detectores pueden confundir identificadores largos con tokens y que la validación activa reduce este ruido. fileciteturn1file0L48-L52
 
 ---
 
-# 19. Desafío final — Gobierno
+# 15. Desafío de gobierno — 15 minutos opcionales
 
-Diseña una política para una organización con cientos de desarrolladores.
+Diseña una política para cientos de desarrolladores:
 
-Debe responder:
-
-1. ¿Quién puede marcar un false positive?
+1. ¿Quién puede marcar un FP?
 2. ¿Quién aprueba una excepción HIGH/CRITICAL?
 3. ¿Qué evidencia es obligatoria?
-4. ¿Cuándo expira una excepción?
-5. ¿Quién la revisa?
+4. ¿Cuándo expira?
+5. ¿Quién revisa?
 6. ¿Cómo se mide el ruido?
-7. ¿Cómo se evita que una excepción se convierta en una vulnerabilidad silenciosa?
-8. ¿Qué ocurre cuando cambia la arquitectura?
+7. ¿Cómo se evita ocultar vulnerabilidades?
+8. ¿Qué pasa cuando cambia la arquitectura?
 
-### Modelo sugerido
+Modelo:
 
 ```text
 Developer
@@ -643,72 +489,34 @@ Fix   Evidence           Risk Process
 
 ---
 
-# 20. Criterios de aceptación
+# 16. Criterios de aceptación
 
-El laboratorio está completo cuando puedas demostrar todo lo siguiente:
+- [ ] El análisis de seguridad no fue desactivado.
+- [ ] HIGH y CRITICAL bloquean.
+- [ ] LOW y MEDIUM siguen visibles pero no bloquean.
+- [ ] Existe política versionada.
+- [ ] Existe un finding real que bloquea.
+- [ ] Existe un FP documentado.
+- [ ] La excepción tiene owner y review date.
+- [ ] No se usa `continue-on-error` para ignorar seguridad.
+- [ ] La excepción tiene mínimo alcance.
+- [ ] Existe audit trail.
+- [ ] Se calculan métricas.
+- [ ] El alumno puede explicar TP, FP, FN y TN.
 
-- [ ] El pipeline analiza seguridad sin ser desactivado.
-- [ ] HIGH y CRITICAL bloquean el PR.
-- [ ] LOW y MEDIUM siguen siendo visibles pero no bloquean.
-- [ ] Existe una política de severidad versionada.
-- [ ] Existe una prueba de un finding real que bloquea.
-- [ ] Existe una prueba de un false positive documentado.
-- [ ] La excepción tiene owner y fecha de revisión.
-- [ ] No se utiliza `continue-on-error` para ignorar seguridad.
-- [ ] La excepción es de mínimo alcance.
-- [ ] Se conserva audit trail.
-- [ ] Se calculan métricas de ruido y excepciones.
-- [ ] El alumno puede explicar la diferencia entre TP, FP, FN y TN.
+# 17. Entregables
 
----
+1. Política de severidad.
+2. Pipeline actualizado.
+3. PR que demuestre bloqueo HIGH/CRITICAL.
+4. PR/commit que demuestre tratamiento de FP.
+5. Evidencia de triage.
+6. Matriz de clasificación.
+7. Métricas.
+8. Presentación final de 5 minutos defendiendo el nuevo modelo.
 
-# 21. Preguntas para discusión final
-
-### Pregunta 1
-
-¿Es correcto dejar pasar todos los MEDIUM?
-
-### Pregunta 2
-
-¿Es correcto bloquear todos los HIGH sin revisar contexto?
-
-### Pregunta 3
-
-¿Un false positive deja de ser importante porque no bloquea?
-
-### Pregunta 4
-
-¿Qué pasa si una regla se convierte en un generador permanente de ruido?
-
-### Pregunta 5
-
-¿Conviene resolver el problema en la herramienta, en el código, en el pipeline o en la política?
-
-### Pregunta 6
-
-¿Qué métrica demuestra que realmente reducimos ruido y no solamente ocultamos findings?
-
----
-
-# 22. Entregables del alumno
-
-Al finalizar, entrega:
-
-1. La política de severidad implementada.
-2. El pipeline actualizado.
-3. Un Pull Request que demuestre el bloqueo por HIGH/CRITICAL.
-4. Un Pull Request o commit que demuestre el tratamiento de un false positive.
-5. La evidencia del triage.
-6. La matriz de clasificación.
-7. Las métricas finales.
-8. Una explicación de 5 minutos sobre por qué el nuevo gate es mejor que bloquear todo.
-
----
-
-# 23. Resultado esperado
-
-El alumno debe terminar con un concepto central:
+# Resultado esperado
 
 > **La madurez DevSecOps no consiste en tener más alertas. Consiste en tener alertas más confiables, una política clara para bloquear y una gestión trazable para el resto.**
 
-Este laboratorio debe reforzar exactamente el flujo de la presentación: triage, tuning, análisis contextual, severidad, confidence, gestión del false positive, audit trail y mejora continua.
+El laboratorio sigue el hilo de la presentación: triage, tuning, análisis contextual, severidad, confidence, gestión del false positive, audit trail y mejora continua. fileciteturn1file0L45-L55 fileciteturn1file0L78-L82
