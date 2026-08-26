@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Insurance Core DevSecOps Metrics Lab",
+          "version": "1.0.0",
+          "informationUri": "https://github.com/aldo2510/insurance-core-api",
+          "rules": [
+            {
+              "id": "DEVSECOPS-CRITICAL-BACKLOG",
+              "name": "Critical security backlog",
+              "shortDescription": {"text": "Critical security finding remains open"},
+              "fullDescription": {"text": "The synthetic security dataset contains an open critical finding."}
+            },
+            {
+              "id": "DEVSECOPS-HIGH-BACKLOG",
+              "name": "High security backlog",
+              "shortDescription": {"text": "High-severity findings remain open"},
+              "fullDescription": {"text": "The synthetic security dataset contains open high-severity findings."}
+            },
+            {
+              "id": "DEVSECOPS-HIGH-COMPLEXITY",
+              "name": "High complexity",
+              "shortDescription": {"text": "High complexity requires attention"},
+              "fullDescription": {"text": "The quality dataset contains high-complexity items."}
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "DEVSECOPS-CRITICAL-BACKLOG",
+          "level": "error",
+          "message": {"text": "1 critical security finding remains open."},
+          "locations": [
+            {"physicalLocation": {"artifactLocation": {"uri": "metrics/devsecops-metrics.json"}, "region": {"startLine": 24}}}
+          ]
+        },
+        {
+          "ruleId": "DEVSECOPS-HIGH-BACKLOG",
+          "level": "error",
+          "message": {"text": "4 high-severity findings remain open."},
+          "locations": [
+            {"physicalLocation": {"artifactLocation": {"uri": "metrics/devsecops-metrics.json"}, "region": {"startLine": 25}}}
+          ]
+        },
+        {
+          "ruleId": "DEVSECOPS-HIGH-COMPLEXITY",
+          "level": "warning",
+          "message": {"text": "21 high-complexity items require attention."},
+          "locations": [
+            {"physicalLocation": {"artifactLocation": {"uri": "metrics/devsecops-metrics.json"}, "region": {"startLine": 35}}}
+          ]
+        }
+      ]
+    }
+  ]
+}
