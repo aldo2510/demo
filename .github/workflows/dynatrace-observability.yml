@@ -25,36 +25,144 @@ jobs:
           java-version: '25'
           cache: maven
 
+      - name: Initialize pipeline telemetry
+        id: telemetry-start
+        env:
+          DYNATRACE_ENV_URL: ${{ secrets.DYNATRACE_ENV_URL }}
+          DYNATRACE_API_TOKEN: ${{ secrets.DYNATRACE_API_TOKEN }}
+        run: |
+          START_EPOCH=$(date +%s)
+          START_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "start_epoch=$START_EPOCH" >> "$GITHUB_OUTPUT"
+          echo "start_time=$START_TIME" >> "$GITHUB_OUTPUT"
+
+          if [ -z "$DYNATRACE_ENV_URL" ] || [ -z "$DYNATRACE_API_TOKEN" ]; then
+            echo "Dynatrace secrets are not configured; telemetry will be skipped."
+            exit 0
+          fi
+
+          PIPELINE_ID="${GITHUB_REPOSITORY}:${GITHUB_WORKFLOW}:${GITHUB_RUN_ID}"
+          PIPELINE_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          curl --fail-with-body --silent --show-error \
+            -X POST "${DYNATRACE_ENV_URL%/}/platform/ingest/v1/events.sdlc" \
+            -H "Authorization: Api-Token ${DYNATRACE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -n \
+              --arg pipeline_id "$PIPELINE_ID" \
+              --arg pipeline_name "$GITHUB_WORKFLOW" \
+              --arg pipeline_url "$PIPELINE_URL" \
+              --arg repository "$GITHUB_REPOSITORY" \
+              --arg branch "$GITHUB_REF_NAME" \
+              --arg revision "$GITHUB_SHA" \
+              --arg run_id "$GITHUB_RUN_ID" \
+              --arg start_time "$START_TIME" \
+              '{
+                "event.type":"pipeline",
+                "event.status":"started",
+                "start_time":$start_time,
+                "pipeline.id":$pipeline_id,
+                "pipeline.name":$pipeline_name,
+                "pipeline.url":$pipeline_url,
+                "pipeline.run.id":$run_id,
+                "vcs.repository":$repository,
+                "vcs.branch":$branch,
+                "vcs.revision":$revision
+              }')" \
+            || echo "WARNING: Dynatrace start event could not be ingested."
+
       - name: Run Maven verification
         id: maven
         continue-on-error: true
         run: mvn -B -ntp clean verify
 
-      - name: Collect pipeline metadata
+      - name: Calculate pipeline telemetry
+        id: telemetry-values
         if: always()
         run: |
-          echo "workflow=${{ github.workflow }}" >> "$GITHUB_ENV"
-          echo "repository=${{ github.repository }}" >> "$GITHUB_ENV"
-          echo "branch=${{ github.ref_name }}" >> "$GITHUB_ENV"
-          echo "commit=${{ github.sha }}" >> "$GITHUB_ENV"
-          echo "run_id=${{ github.run_id }}" >> "$GITHUB_ENV"
-          echo "maven_outcome=${{ steps.maven.outcome }}" >> "$GITHUB_ENV"
+          END_EPOCH=$(date +%s)
+          END_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          DURATION=$((END_EPOCH - ${{ steps.telemetry-start.outputs.start_epoch }}))
 
-      - name: Publish pipeline event to Dynatrace
-        if: always() && env.DYNATRACE_ENV_URL != ''
+          if [ "${{ steps.maven.outcome }}" = "success" ]; then
+            PIPELINE_SUCCESS=1
+          else
+            PIPELINE_SUCCESS=0
+          fi
+
+          echo "end_epoch=$END_EPOCH" >> "$GITHUB_OUTPUT"
+          echo "end_time=$END_TIME" >> "$GITHUB_OUTPUT"
+          echo "duration=$DURATION" >> "$GITHUB_OUTPUT"
+          echo "pipeline_success=$PIPELINE_SUCCESS" >> "$GITHUB_OUTPUT"
+
+      - name: Publish pipeline event and metrics to Dynatrace
+        if: always()
         env:
           DYNATRACE_ENV_URL: ${{ secrets.DYNATRACE_ENV_URL }}
           DYNATRACE_API_TOKEN: ${{ secrets.DYNATRACE_API_TOKEN }}
         run: |
-          echo "Dynatrace endpoint configured."
-          echo "Workflow: ${{ github.workflow }}"
-          echo "Repository: ${{ github.repository }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Run: ${{ github.run_id }}"
-          echo "Maven result: ${{ steps.maven.outcome }}"
-          echo ""
-          echo "POC placeholder: the next step will replace this with the Dynatrace SDLC Events API call after the tenant endpoint and token are configured."
+          if [ -z "$DYNATRACE_ENV_URL" ] || [ -z "$DYNATRACE_API_TOKEN" ]; then
+            echo "Dynatrace secrets are not configured; telemetry skipped."
+            exit 0
+          fi
+
+          PIPELINE_ID="${GITHUB_REPOSITORY}:${GITHUB_WORKFLOW}:${GITHUB_RUN_ID}"
+          PIPELINE_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          MAVEN_STATUS="${{ steps.maven.outcome }}"
+          PIPELINE_SUCCESS="${{ steps.telemetry-values.outputs.pipeline_success }}"
+          DURATION="${{ steps.telemetry-values.outputs.duration }}"
+          START_TIME="${{ steps.telemetry-start.outputs.start_time }}"
+          END_TIME="${{ steps.telemetry-values.outputs.end_time }}"
+
+          echo "Publishing Dynatrace SDLC pipeline event..."
+          curl --fail-with-body --silent --show-error \
+            -X POST "${DYNATRACE_ENV_URL%/}/platform/ingest/v1/events.sdlc" \
+            -H "Authorization: Api-Token ${DYNATRACE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -n \
+              --arg pipeline_id "$PIPELINE_ID" \
+              --arg pipeline_name "$GITHUB_WORKFLOW" \
+              --arg pipeline_url "$PIPELINE_URL" \
+              --arg repository "$GITHUB_REPOSITORY" \
+              --arg branch "$GITHUB_REF_NAME" \
+              --arg revision "$GITHUB_SHA" \
+              --arg run_id "$GITHUB_RUN_ID" \
+              --arg start_time "$START_TIME" \
+              --arg end_time "$END_TIME" \
+              --arg status "$MAVEN_STATUS" \
+              '{
+                "event.type":"pipeline",
+                "event.status":"finished",
+                "start_time":$start_time,
+                "end_time":$end_time,
+                "pipeline.id":$pipeline_id,
+                "pipeline.name":$pipeline_name,
+                "pipeline.url":$pipeline_url,
+                "pipeline.run.id":$run_id,
+                "pipeline.status":$status,
+                "vcs.repository":$repository,
+                "vcs.branch":$branch,
+                "vcs.revision":$revision
+              }')" \
+            || echo "WARNING: Dynatrace finish event could not be ingested."
+
+          echo "Publishing Dynatrace custom metrics..."
+          METRICS_PAYLOAD=$(cat <<EOF
+insurance.pipeline.duration.seconds,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} gauge,${DURATION}
+insurance.pipeline.success,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} gauge,${PIPELINE_SUCCESS}
+insurance.pipeline.run.count,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} count,delta=1
+insurance.pipeline.maven.verify.success,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} gauge,${PIPELINE_SUCCESS}
+EOF
+)
+
+          curl --fail-with-body --silent --show-error \
+            -X POST "${DYNATRACE_ENV_URL%/}/api/v2/metrics/ingest" \
+            -H "Authorization: Api-Token ${DYNATRACE_API_TOKEN}" \
+            -H "Content-Type: text/plain" \
+            --data-binary "$METRICS_PAYLOAD" \
+            || echo "WARNING: Dynatrace metrics could not be ingested."
+
+          echo "Dynatrace telemetry publication completed."
 
       - name: Fail if build failed
         if: steps.maven.outcome == 'failure'
