@@ -147,13 +147,12 @@ jobs:
             || echo "WARNING: Dynatrace finish event could not be ingested."
 
           echo "Publishing Dynatrace custom metrics..."
-          METRICS_PAYLOAD=$(cat <<EOF
-insurance.pipeline.duration.seconds,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} gauge,${DURATION}
-insurance.pipeline.success,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} gauge,${PIPELINE_SUCCESS}
-insurance.pipeline.run.count,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} count,delta=1
-insurance.pipeline.maven.verify.success,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} gauge,${PIPELINE_SUCCESS}
-EOF
-)
+          METRICS_PAYLOAD=$(printf '%s\n' \
+            "insurance.pipeline.duration.seconds,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} gauge,${DURATION}" \
+            "insurance.pipeline.success,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} gauge,${PIPELINE_SUCCESS}" \
+            "insurance.pipeline.run.count,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} count,delta=1" \
+            "insurance.pipeline.maven.verify.success,repository=${GITHUB_REPOSITORY},branch=${GITHUB_REF_NAME},workflow=${GITHUB_WORKFLOW} gauge,${PIPELINE_SUCCESS}"
+          )
 
           curl --fail-with-body --silent --show-error \
             -X POST "${DYNATRACE_ENV_URL%/}/api/v2/metrics/ingest" \
